@@ -33,13 +33,20 @@ public class TimetableService {
 
     @Transactional
     public List<Map<String, Object>> replaceForClass(UUID classId, List<TimetableItemRequest> items) {
+        ClassEntity klass = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found"));
+
+        if (items == null) {
+            throw new com.edutrack.exception.BadRequestException("Timetable items are required");
+        }
+
+        validateTimetableItems(classId, items);
+
         // Simplest consistent behaviour: wipe and recreate the week for the class.
         List<Timetable> existing = timetableRepository.findByClassEntityIdOrderByDayOfWeekAscPeriodNumberAsc(classId);
         timetableRepository.deleteAll(existing);
 
         List<Map<String, Object>> result = items.stream().map(item -> {
-            ClassEntity klass = classRepository.findById(item.classId() != null ? item.classId() : classId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Class not found"));
             Subject subject = subjectRepository.findById(item.subjectId())
                     .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
 
@@ -55,6 +62,63 @@ public class TimetableService {
         }).toList();
 
         return result;
+    }
+
+    private void validateTimetableItems(UUID classId, List<TimetableItemRequest> items) {
+        List<String> allowedDays = List.of("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday");
+        Map<String, TimetableItemRequest> slotMap = new java.util.HashMap<>();
+
+        for (TimetableItemRequest item : items) {
+            if (item == null) {
+                throw new com.edutrack.exception.BadRequestException("Timetable item cannot be null");
+            }
+            if (item.subjectId() == null) {
+                throw new com.edutrack.exception.BadRequestException("Subject is required for every timetable slot");
+            }
+            if (item.dayOfWeek() == null || item.dayOfWeek().isBlank() || !allowedDays.contains(item.dayOfWeek())) {
+                throw new com.edutrack.exception.BadRequestException("Invalid day of week: " + item.dayOfWeek());
+            }
+            if (item.periodNumber() == null || item.periodNumber() <= 0 || item.periodNumber() > 12) {
+                throw new com.edutrack.exception.BadRequestException("Invalid period number: " + item.periodNumber());
+            }
+            if (item.startTime() == null || item.endTime() == null) {
+                throw new com.edutrack.exception.BadRequestException("Start time and end time are required for every timetable slot");
+            }
+            if (!item.startTime().isBefore(item.endTime())) {
+                throw new com.edutrack.exception.BadRequestException("Start time must be before end time for period " + item.periodNumber());
+            }
+
+            String slotKey = item.dayOfWeek() + "#" + item.periodNumber();
+            if (slotMap.containsKey(slotKey)) {
+                throw new com.edutrack.exception.BadRequestException("Duplicate timetable entry for " + item.dayOfWeek() + " period " + item.periodNumber());
+            }
+            slotMap.put(slotKey, item);
+
+            Subject subject = subjectRepository.findById(item.subjectId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
+            if (!Boolean.TRUE.equals(subject.getIsActive())) {
+                throw new com.edutrack.exception.BadRequestException("Subject is inactive: " + subject.getName());
+            }
+            if (subject.getTeacher() != null && subject.getTeacher().getUser() != null
+                    && !Boolean.TRUE.equals(subject.getTeacher().getUser().getIsActive())) {
+                throw new com.edutrack.exception.BadRequestException("Cannot assign inactive teacher for subject: " + subject.getName());
+            }
+
+            if (subject.getTeacher() != null) {
+                UUID teacherId = subject.getTeacher().getId();
+                List<Timetable> teacherSlots = timetableRepository.findBySubjectTeacherId(teacherId);
+                boolean conflict = teacherSlots.stream().anyMatch(slot ->
+                        slot.getDayOfWeek().equals(item.dayOfWeek())
+                                && slot.getPeriodNumber().equals(item.periodNumber())
+                                && !slot.getClassEntity().getId().equals(classId)
+                );
+                if (conflict) {
+                    throw new com.edutrack.exception.ConflictException(
+                            "Teacher " + subject.getTeacher().getUser().getName() + " is already assigned during "
+                                    + item.dayOfWeek() + " period " + item.periodNumber());
+                }
+            }
+        }
     }
 
     @Transactional

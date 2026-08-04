@@ -8,7 +8,6 @@ com\edutrack\repository\supabase\AttendanceRepository.class
 com\edutrack\security\JwtUtil.class
 com\edutrack\config\CloudinaryConfig.class
 com\edutrack\model\document\AttendanceImport.class
-com\edutrack\controller\AdminTeacherController.class
 com\edutrack\model\document\ExamPaper$Section.class
 com\edutrack\exception\ErrorResponse.class
 com\edutrack\model\document\Notification.class
@@ -52,7 +51,6 @@ com\edutrack\repository\supabase\TimetableRepository.class
 com\edutrack\model\document\ExamPaper$Question.class
 com\edutrack\model\document\ExamPaper$Section$SectionBuilder.class
 com\edutrack\controller\HealthController.class
-com\edutrack\service\TeacherService.class
 com\edutrack\controller\MaterialController.class
 com\edutrack\model\dto\request\MarksEnterRequest.class
 com\edutrack\model\document\AttendanceImport$AttendanceImportBuilder.class

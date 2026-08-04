@@ -7,12 +7,9 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ExamScheduleRepository extends JpaRepository<ExamSchedule, UUID> {
-    
     List<ExamSchedule> findByClassEntityId(UUID classId);
-    
+    List<ExamSchedule> findByClassEntityIdAndSubjectId(UUID classId, UUID subjectId);
     List<ExamSchedule> findByClassEntityIdAndExamTypeId(UUID classId, UUID examTypeId);
-
-    // ADD THIS
     boolean existsBySubjectId(UUID subjectId);
     boolean existsByClassEntityId(UUID classId);
 }

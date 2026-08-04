@@ -10,13 +10,11 @@ public record SubjectCreateRequest(
         @NotBlank(message = "Subject name is required")
         String name,
 
-        @NotBlank(message = "Subject code is required")
         String code,
 
         @NotNull(message = "Class is required")
         UUID classId,
 
-        @NotNull(message = "Teacher is required")
         UUID teacherId
 
 ) {}

@@ -35,4 +35,10 @@ public class TeacherSelfController {
         ownershipGuard.assertCanViewClass(classId);
         return ResponseEntity.ok(teacherSelfService.getStudentsInClass(classId));
     }
+
+    @GetMapping("/students/{studentId}")
+    public ResponseEntity<Map<String, Object>> studentDetail(@PathVariable UUID studentId) {
+        ownershipGuard.assertCanViewStudent(studentId);
+        return ResponseEntity.ok(teacherSelfService.getStudentDetail(studentId));
+    }
 }

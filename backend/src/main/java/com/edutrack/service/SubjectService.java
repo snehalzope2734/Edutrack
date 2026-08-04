@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -46,7 +47,18 @@ public class SubjectService {
     @Transactional
     public Map<String, Object> create(SubjectCreateRequest req) {
 
-        if (subjectRepository.existsByCodeAndIsActiveTrue(req.code())) {
+        ClassEntity classEntity = classRepository.findById(req.classId())
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found"));
+
+        Teacher teacher = null;
+        if (req.teacherId() != null) {
+            teacher = teacherRepository.findById(req.teacherId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Teacher not found"));
+        }
+
+        String generatedCode = generateCode(req.name(), classEntity);
+
+        if (subjectRepository.existsByCodeAndIsActiveTrue(generatedCode)) {
             throw new ConflictException("Subject code already exists");
         }
 
@@ -54,15 +66,9 @@ public class SubjectService {
             throw new ConflictException("This subject already exists for the selected class");
         }
 
-        ClassEntity classEntity = classRepository.findById(req.classId())
-                .orElseThrow(() -> new ResourceNotFoundException("Class not found"));
-
-        Teacher teacher = teacherRepository.findById(req.teacherId())
-                .orElseThrow(() -> new ResourceNotFoundException("Teacher not found"));
-
         Subject subject = Subject.builder()
                 .name(req.name())
-                .code(req.code())
+                .code(generatedCode)
                 .classEntity(classEntity)
                 .teacher(teacher)
                 .isActive(true)
@@ -92,22 +98,26 @@ public class SubjectService {
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Subject not found"));
 
-        if (!subject.getCode().equals(req.code())
-                && subjectRepository.existsByCodeAndIsActiveTrue(req.code())) {
-
-            throw new ConflictException("Subject code already exists");
-        }
-
         ClassEntity classEntity = classRepository.findById(req.classId())
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Class not found"));
 
-        Teacher teacher = teacherRepository.findById(req.teacherId())
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Teacher not found"));
+        Teacher teacher = null;
+        if (req.teacherId() != null) {
+            teacher = teacherRepository.findById(req.teacherId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Teacher not found"));
+        }
+
+        String generatedCode = generateCode(req.name(), classEntity);
+
+        if (!subject.getCode().equals(generatedCode)
+                && subjectRepository.existsByCodeAndIsActiveTrue(generatedCode)) {
+
+            throw new ConflictException("Subject code already exists");
+        }
 
         subject.setName(req.name());
-        subject.setCode(req.code());
+        subject.setCode(generatedCode);
         subject.setClassEntity(classEntity);
         subject.setTeacher(teacher);
 
@@ -128,6 +138,18 @@ public class SubjectService {
         subjectRepository.save(subject);
     }
 
+    private String generateCode(String subjectName, ClassEntity classEntity) {
+        String baseName = subjectName == null ? "" : subjectName.trim().toUpperCase(Locale.ROOT);
+        String className = classEntity.getClassName() == null ? "" : classEntity.getClassName().trim().toUpperCase(Locale.ROOT);
+        String section = classEntity.getSection() == null ? "" : classEntity.getSection().trim().toUpperCase(Locale.ROOT);
+
+        String cleanedName = baseName.replaceAll("[^A-Z0-9]+", "");
+        String cleanedClass = className.replaceAll("[^A-Z0-9]+", "");
+        String cleanedSection = section.replaceAll("[^A-Z0-9]+", "");
+
+        return (cleanedName + cleanedClass + cleanedSection).replaceAll("^([A-Z0-9]{1,})$", "$1");
+    }
+
     private Map<String, Object> toDto(Subject subject) {
 
         Map<String, Object> map = new LinkedHashMap<>();
@@ -145,11 +167,13 @@ public class SubjectService {
                 subject.getClassEntity().getClassName()
                         + subject.getClassEntity().getSection());
 
-        map.put("teacherId",
-                subject.getTeacher().getId());
-
-        map.put("teacherName",
-                subject.getTeacher().getUser().getName());
+        if (subject.getTeacher() != null) {
+            map.put("teacherId", subject.getTeacher().getId());
+            map.put("teacherName", subject.getTeacher().getUser().getName());
+        } else {
+            map.put("teacherId", null);
+            map.put("teacherName", null);
+        }
 
         return map;
     }

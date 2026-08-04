@@ -17,6 +17,8 @@ public interface MarksRepository extends JpaRepository<Marks, UUID> {
 
     List<Marks> findByStudentIdAndExamTypeId(UUID studentId, UUID examTypeId);
 
+    List<Marks> findByStudentClassEntityIdAndSubjectId(UUID classId, UUID subjectId);
+
     Optional<Marks> findByStudentIdAndSubjectIdAndExamTypeId(UUID studentId, UUID subjectId, UUID examTypeId);
     boolean existsByStudentClassEntityId(UUID classId);
 }
