@@ -20,7 +20,6 @@ import ExamManagementPage from "./pages/admin/ExamManagementPage";
 import TimetableBuilderPage from "./pages/admin/TimetableBuilderPage";
 import SchoolSettingsPage from "./pages/admin/SchoolSettingsPage";
 import NotificationsComposePage from "./pages/admin/NotificationsComposePage";
-import AdminNoticesPage from "./pages/admin/NoticesPage";
 import AdminChangeRequestsPage from "./pages/admin/AdminChangeRequestsPage";
 import AdminAttendanceHistoryPage from "./pages/admin/AdminAttendanceHistoryPage";
 
@@ -33,7 +32,6 @@ import AttendanceImportPage from "./pages/teacher/AttendanceImportPage";
 import MarksEntryPage from "./pages/teacher/MarksEntryPage";
 import TeacherMaterialsPage from "./pages/teacher/MaterialsPage";
 import TeacherReportCardsPage from "./pages/teacher/ReportCardsPage";
-import TeacherNoticesPage from "./pages/teacher/NoticesPage";
 import ChangeRequestsPage from "./pages/teacher/ChangeRequestsPage";
 
 // Student
@@ -56,7 +54,6 @@ const adminNav = [
   { to: "/admin/subjects", label: "Subjects", icon: BookOpen },
   { to: "/admin/exams", label: "Exams", icon: ListChecks },
   { to: "/admin/timetable", label: "Timetable", icon: CalendarClock },
-  { to: "/admin/notices", label: "Notices", icon: Megaphone },
   { to: "/admin/notifications", label: "Notifications", icon: Bell },
   { to: "/admin/attendance-imports", label: "Attendance Imports", icon: UserCheck },
   { to: "/admin/change-requests", label: "Change Requests", icon: ClipboardList },
@@ -71,7 +68,7 @@ const teacherNav = [
   { to: "/teacher/marks", label: "Marks Entry", icon: ClipboardList },
   { to: "/teacher/materials", label: "Materials", icon: BookOpen },
   { to: "/teacher/report-cards", label: "Report Cards", icon: FileDown },
-  { to: "/teacher/notices", label: "Notices", icon: Megaphone },
+  { to: "/teacher/notifications", label: "Notifications", icon: Bell },
   { to: "/teacher/change-requests", label: "Change Requests", icon: ClipboardList },
 ];
 
@@ -104,7 +101,6 @@ export default function App() {
           <Route path="/admin/subjects" element={<SubjectListPage />} />
           <Route path="/admin/exams" element={<ExamManagementPage />} />
           <Route path="/admin/timetable" element={<TimetableBuilderPage />} />
-          <Route path="/admin/notices" element={<AdminNoticesPage />} />
           <Route path="/admin/notifications" element={<NotificationsComposePage />} />
           <Route path="/admin/attendance-imports" element={<AdminAttendanceHistoryPage />} />
           <Route path="/admin/change-requests" element={<AdminChangeRequestsPage />} />
@@ -122,7 +118,8 @@ export default function App() {
           <Route path="/teacher/marks" element={<MarksEntryPage />} />
           <Route path="/teacher/materials" element={<TeacherMaterialsPage />} />
           <Route path="/teacher/report-cards" element={<TeacherReportCardsPage />} />
-          <Route path="/teacher/notices" element={<TeacherNoticesPage />} />
+          <Route path="/teacher/notifications" element={<NotificationsPage />} />
+          <Route path="/teacher/notices" element={<Navigate to="/teacher/notifications" replace />} />
           <Route path="/teacher/change-requests" element={<ChangeRequestsPage />} />
         </Route>
       </Route>
