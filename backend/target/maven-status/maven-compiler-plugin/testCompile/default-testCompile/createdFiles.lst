@@ -1,0 +1,6 @@
+com\edutrack\util\GradeCalculatorTest.class
+com\edutrack\util\AttendanceStatusNormalizerTest.class
+com\edutrack\PasswordGenerator.class
+com\edutrack\security\OwnershipGuardTest.class
+com\edutrack\service\AttendanceImportServiceTest.class
+com\edutrack\service\AuthServiceTest.class

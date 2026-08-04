@@ -1,0 +1,22 @@
+package com.edutrack.repository.supabase;
+
+import com.edutrack.model.entity.Marks;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface MarksRepository extends JpaRepository<Marks, UUID> {
+
+    List<Marks> findByStudentClassEntityIdAndSubjectIdAndExamTypeId(UUID classId, UUID subjectId, UUID examTypeId);
+
+    List<Marks> findByStudentId(UUID studentId);
+
+    List<Marks> findByStudentIdAndSubjectId(UUID studentId, UUID subjectId);
+
+    List<Marks> findByStudentIdAndExamTypeId(UUID studentId, UUID examTypeId);
+
+    Optional<Marks> findByStudentIdAndSubjectIdAndExamTypeId(UUID studentId, UUID subjectId, UUID examTypeId);
+    boolean existsByStudentClassEntityId(UUID classId);
+}

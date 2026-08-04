@@ -1,0 +1,43 @@
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+
+# IDEs
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Java
+/target/
+*.class
+*.log
+*.jar
+*.war
+*.ear
+hs_err_pid*
+
+# Maven
+/.mvn/
+dependency-reduced-pom.xml
+release.properties
+
+# Node
+/frontend/node_modules/
+/frontend/dist/
+/frontend/build/
+/frontend/.vite/
+/frontend/npm-debug.log*
+/frontend/yarn-debug.log*
+/frontend/yarn-error.log*
+/frontend/pnpm-debug.log*
+
+# Project metadata
+/.metadata/
+
+# Misc
+*.swp
+*~

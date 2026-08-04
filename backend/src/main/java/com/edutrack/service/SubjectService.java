@@ -1,0 +1,156 @@
+package com.edutrack.service;
+
+import com.edutrack.exception.ConflictException;
+import com.edutrack.exception.ResourceNotFoundException;
+import com.edutrack.model.dto.request.SubjectCreateRequest;
+import com.edutrack.model.dto.request.SubjectUpdateRequest;
+import com.edutrack.model.entity.ClassEntity;
+import com.edutrack.model.entity.Subject;
+import com.edutrack.model.entity.Teacher;
+import com.edutrack.repository.supabase.ClassRepository;
+import com.edutrack.repository.supabase.SubjectRepository;
+import com.edutrack.repository.supabase.TeacherRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class SubjectService {
+
+    private final SubjectRepository subjectRepository;
+    private final ClassRepository classRepository;
+    private final TeacherRepository teacherRepository;
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> list(UUID classId) {
+
+        List<Subject> subjects;
+
+        if (classId == null) {
+            subjects = subjectRepository.findByIsActiveTrue();
+        } else {
+            subjects = subjectRepository.findByClassEntityIdAndIsActiveTrue(classId);
+        }
+
+        return subjects.stream()
+                .map(this::toDto)
+                .toList();
+    }
+
+    @Transactional
+    public Map<String, Object> create(SubjectCreateRequest req) {
+
+        if (subjectRepository.existsByCodeAndIsActiveTrue(req.code())) {
+            throw new ConflictException("Subject code already exists");
+        }
+
+        if (subjectRepository.existsByNameAndClassEntityIdAndIsActiveTrue(req.name(), req.classId())) {
+            throw new ConflictException("This subject already exists for the selected class");
+        }
+
+        ClassEntity classEntity = classRepository.findById(req.classId())
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found"));
+
+        Teacher teacher = teacherRepository.findById(req.teacherId())
+                .orElseThrow(() -> new ResourceNotFoundException("Teacher not found"));
+
+        Subject subject = Subject.builder()
+                .name(req.name())
+                .code(req.code())
+                .classEntity(classEntity)
+                .teacher(teacher)
+                .isActive(true)
+                .build();
+
+        subject = subjectRepository.save(subject);
+
+        return toDto(subject);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getById(UUID id) {
+
+        Subject subject = subjectRepository.findById(id)
+                .filter(Subject::getIsActive)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Subject not found"));
+
+        return toDto(subject);
+    }
+
+    @Transactional
+    public Map<String, Object> update(UUID id, SubjectUpdateRequest req) {
+
+        Subject subject = subjectRepository.findById(id)
+                .filter(Subject::getIsActive)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Subject not found"));
+
+        if (!subject.getCode().equals(req.code())
+                && subjectRepository.existsByCodeAndIsActiveTrue(req.code())) {
+
+            throw new ConflictException("Subject code already exists");
+        }
+
+        ClassEntity classEntity = classRepository.findById(req.classId())
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Class not found"));
+
+        Teacher teacher = teacherRepository.findById(req.teacherId())
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Teacher not found"));
+
+        subject.setName(req.name());
+        subject.setCode(req.code());
+        subject.setClassEntity(classEntity);
+        subject.setTeacher(teacher);
+
+        subject = subjectRepository.save(subject);
+
+        return toDto(subject);
+    }
+
+    @Transactional
+    public void delete(UUID id) {
+
+        Subject subject = subjectRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Subject not found"));
+
+        subject.setIsActive(false);
+
+        subjectRepository.save(subject);
+    }
+
+    private Map<String, Object> toDto(Subject subject) {
+
+        Map<String, Object> map = new LinkedHashMap<>();
+
+        map.put("id", subject.getId());
+
+        map.put("name", subject.getName());
+
+        map.put("code", subject.getCode());
+
+        map.put("classId",
+                subject.getClassEntity().getId());
+
+        map.put("className",
+                subject.getClassEntity().getClassName()
+                        + subject.getClassEntity().getSection());
+
+        map.put("teacherId",
+                subject.getTeacher().getId());
+
+        map.put("teacherName",
+                subject.getTeacher().getUser().getName());
+
+        return map;
+    }
+}
