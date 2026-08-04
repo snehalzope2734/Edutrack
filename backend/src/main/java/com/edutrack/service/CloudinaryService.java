@@ -70,6 +70,23 @@ public class CloudinaryService {
         }
     }
 
+    public String uploadRawBytes(byte[] bytes, String folder, String publicId) {
+        try {
+            Map<String, Object> options = ObjectUtils.asMap(
+                    "folder", folder,
+                    "public_id", publicId,
+                    "resource_type", "raw",
+                    "type", "upload"
+            );
+
+            Map result = cloudinary.uploader().upload(bytes, options);
+            Object secureUrl = result.get("secure_url");
+            return secureUrl != null ? secureUrl.toString() : null;
+        } catch (Exception e) {
+            throw new RuntimeException("Cloudinary raw upload failed", e);
+        }
+    }
+
     public void deleteAsset(String publicId) {
         try {
 

@@ -1,5 +1,7 @@
 package com.edutrack.service;
 
+import com.edutrack.exception.BadRequestException;
+import com.edutrack.exception.ConflictException;
 import com.edutrack.exception.ResourceNotFoundException;
 import com.edutrack.exception.UnauthorizedException;
 import com.edutrack.model.document.StudyMaterial;
@@ -31,16 +33,31 @@ public class MaterialService {
     }
 
     public StudyMaterial create(MaterialRequest req, String uploadedByUserId) {
+        String title = req.title() == null ? "" : req.title().trim();
+        if (title.isBlank()) {
+            throw new BadRequestException("Title is required");
+        }
+        if (!"pdf".equalsIgnoreCase(req.fileType()) && !"application/pdf".equalsIgnoreCase(req.fileType())) {
+            throw new BadRequestException("Only PDF files are allowed.");
+        }
+        if (req.fileSizeKb() != null && req.fileSizeKb() > 10240) {
+            throw new BadRequestException("PDF exceeds maximum size.");
+        }
+        if (materialRepository.existsByClassIdAndSubjectIdAndTitleIgnoreCaseAndIsActiveTrue(
+                req.classId().toString(), req.subjectId().toString(), title)) {
+            throw new ConflictException("A PDF note with the same title already exists for this class and subject.");
+        }
+
         StudyMaterial material = StudyMaterial.builder()
-                .title(req.title())
-                .description(req.description())
-                .type(req.type())
+                .title(title)
+                .description(req.description() == null ? null : req.description().trim())
+                .type("notes")
                 .classId(req.classId().toString())
                 .subjectId(req.subjectId().toString())
                 .uploadedBy(uploadedByUserId)
                 .cloudinaryUrl(req.cloudinaryUrl())
                 .cloudinaryPublicId(req.cloudinaryPublicId())
-                .fileType(req.fileType())
+                .fileType("pdf")
                 .fileSizeKb(req.fileSizeKb())
                 .tags(req.tags())
                 .uploadedAt(Instant.now())

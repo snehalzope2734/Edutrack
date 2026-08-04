@@ -7,6 +7,9 @@ export const reportCardApi = {
   create: (data) =>
     api.post("/report-cards", data),
 
+  generateAndStore: (data) =>
+    api.post("/report-cards/generate", data),
+
   remove: (id) =>
     api.delete(`/report-cards/${id}`),
 

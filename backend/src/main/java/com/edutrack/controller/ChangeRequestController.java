@@ -54,6 +54,6 @@ public class ChangeRequestController {
     @PutMapping("/{id}/review")
     @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
     public ResponseEntity<Map<String, Object>> review(@PathVariable UUID id, @RequestBody ChangeRequestReviewRequest request) {
-        return ResponseEntity.ok(changeRequestService.review(id, request.status(), CurrentUser.id()));
+        return ResponseEntity.ok(changeRequestService.review(id, request, CurrentUser.id()));
     }
 }

@@ -263,6 +263,19 @@ public class TeacherSelfService {
         return dto;
     }
 
+    private Map<String, Object> toDetailDto(Student student) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        dto.put("id", student.getId());
+        dto.put("name", student.getUser() != null ? student.getUser().getName() : null);
+        dto.put("rollNumber", student.getRollNumber());
+        dto.put("parentName", student.getParentName());
+        dto.put("email", student.getUser() != null ? student.getUser().getEmail() : null);
+        dto.put("phone", student.getUser() != null ? student.getUser().getPhone() : null);
+        dto.put("classId", student.getClassEntity() != null ? student.getClassEntity().getId() : null);
+        dto.put("className", student.getClassEntity() != null ? student.getClassEntity().getClassName() + student.getClassEntity().getSection() : null);
+        return dto;
+    }
+
     private double computeStudentAttendancePercent(UUID studentId) {
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(30);

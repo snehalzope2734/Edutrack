@@ -4,5 +4,6 @@ public record ChangeRequestCreateRequest(
         String fieldName,
         String oldValue,
         String newValue,
-        String reason
+        String reason,
+        String attachmentNames
 ) {}

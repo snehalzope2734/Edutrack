@@ -5,18 +5,11 @@ import PageHeader from "../../components/common/PageHeader";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import EmptyState from "../../components/common/EmptyState";
 import { teacherApi } from "../../api/teacherApi";
-
-const actionItems = [
-  { label: "My Classes", icon: Layers, route: "/teacher/classes" },
-  { label: "Students", icon: Users, route: "/teacher/students" },
-  { label: "Attendance", icon: ClipboardList, route: "/teacher/attendance" },
-  { label: "Marks Entry", icon: ClipboardList, route: "/teacher/marks" },
-  { label: "Materials", icon: BookOpen, route: "/teacher/materials" },
-  { label: "Notifications", icon: Mail, route: "/teacher/notifications" },
-];
+import { materialApi } from "../../api/materialApi";
 
 export default function TeacherDashboard() {
   const [profile, setProfile] = useState(null);
+  const [materialsCount, setMaterialsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -25,6 +18,15 @@ export default function TeacherDashboard() {
       try {
         const { data } = await teacherApi.me();
         setProfile(data);
+
+        const classIds = [...new Set((data?.subjects || []).map((subject) => subject.classId).filter(Boolean))];
+        if (classIds.length > 0) {
+          const materialResponses = await Promise.all(classIds.map((classId) => materialApi.list({ classId, page: 0, size: 1 })));
+          const nextCount = materialResponses.reduce((sum, response) => sum + (response?.data?.totalElements ?? response?.data?.content?.length ?? 0), 0);
+          setMaterialsCount(nextCount);
+        } else {
+          setMaterialsCount(0);
+        }
       } finally {
         setLoading(false);
       }
@@ -36,6 +38,17 @@ export default function TeacherDashboard() {
   const totalClasses = subjects.length;
   const totalStudents = subjects.reduce((sum, subject) => sum + (subject.studentCount || 0), 0);
   const totalSubjects = new Set(subjects.map((subject) => subject.subjectName)).size;
+  const actionItems = useMemo(
+    () => [
+      { label: "My Classes", icon: Layers, route: "/teacher/classes" },
+      { label: "Students", icon: Users, route: "/teacher/students" },
+      { label: "Attendance", icon: ClipboardList, route: "/teacher/attendance" },
+      { label: "Marks Entry", icon: ClipboardList, route: "/teacher/marks" },
+      { label: "Materials", icon: BookOpen, route: "/teacher/materials", count: materialsCount },
+      { label: "Notifications", icon: Mail, route: "/teacher/notifications" },
+    ],
+    [materialsCount]
+  );
 
   if (loading) return <LoadingSpinner />;
 
@@ -132,7 +145,12 @@ export default function TeacherDashboard() {
                 className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-left text-sm font-semibold text-slate-900 transition hover:border-brand-300 hover:bg-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
               >
                 <item.icon className="h-4 w-4 text-brand-600" />
-                {item.label}
+                <span>{item.label}</span>
+                {item.count != null && (
+                  <span className="ml-auto rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
+                    {item.count}
+                  </span>
+                )}
               </button>
             ))}
           </div>

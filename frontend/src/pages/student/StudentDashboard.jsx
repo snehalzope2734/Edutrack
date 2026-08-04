@@ -60,15 +60,6 @@ const ATTENDANCE_RING = {
   red: "from-rose-400 to-rose-600",
 };
 
-const actionCards = [
-  { label: "View Timetable", icon: CalendarDays, route: "/student/timetable" },
-  { label: "View Report Card", icon: FileText, route: "/student/report-cards" },
-  { label: "Study Materials", icon: BookOpen, route: "/student/materials" },
-  { label: "Attendance", icon: ClipboardList, route: "/student/attendance" },
-  { label: "Marks", icon: ChartBar, route: "/student/marks" },
-  { label: "Exam Schedule", icon: Clock3, route: "/student/exam-schedule" },
-];
-
 function parseTime(value) {
   if (!value) return null;
   const parsed = parse(value, "HH:mm", new Date());
@@ -87,6 +78,7 @@ export default function StudentDashboard() {
   const [weeklyRecords, setWeeklyRecords] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [materials, setMaterials] = useState([]);
+  const [materialsCount, setMaterialsCount] = useState(0);
   const [assignments, setAssignments] = useState([]);
   const [reportCards, setReportCards] = useState([]);
   const [examSchedule, setExamSchedule] = useState([]);
@@ -158,6 +150,7 @@ export default function StudentDashboard() {
         setWeeklyRecords(recordsRes.data || []);
         setNotifications(notifsRes.data.content ?? []);
         setMaterials(materialsRes.data.content ?? []);
+        setMaterialsCount(materialsRes.data.totalElements ?? materialsRes.data.content?.length ?? 0);
         setAssignments(assignmentsRes.data.content ?? []);
         setReportCards(reportCardRes.data ?? []);
         setTimetable(timetableRes.data ?? []);
@@ -177,6 +170,17 @@ export default function StudentDashboard() {
   const unreadNotifications = notifications.filter((item) => !item.isReadBy?.includes(user?.userId)).length;
   const assignmentCount = assignments.length;
   const subjectCount = marks?.subjectWise?.length ?? 0;
+  const actionCards = useMemo(
+    () => [
+      { label: "View Timetable", icon: CalendarDays, route: "/student/timetable" },
+      { label: "View Report Card", icon: FileText, route: "/student/report-cards" },
+      { label: "Study Materials", icon: BookOpen, route: "/student/materials", count: materialsCount },
+      { label: "Attendance", icon: ClipboardList, route: "/student/attendance" },
+      { label: "Marks", icon: ChartBar, route: "/student/marks" },
+      { label: "Exam Schedule", icon: Clock3, route: "/student/exam-schedule" },
+    ],
+    [materialsCount]
+  );
 
   const nextExam = useMemo(() => {
     return examSchedule
@@ -659,9 +663,14 @@ export default function StudentDashboard() {
                   <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Study Materials</p>
                   <h2 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">Latest uploads</h2>
                 </div>
-                <button onClick={() => navigate("/student/materials")} className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200">
-                  Browse all
-                </button>
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-brand-600/10 px-3 py-1 text-sm font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+                    {materialsCount} available
+                  </span>
+                  <button onClick={() => navigate("/student/materials")} className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200">
+                    Browse all
+                  </button>
+                </div>
               </div>
               {latestMaterials.length === 0 ? (
                 <EmptyState title="No recent materials" />
@@ -801,7 +810,12 @@ export default function StudentDashboard() {
                 className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
               >
                 <action.icon className="h-5 w-5 text-brand-600" />
-                {action.label}
+                <span>{action.label}</span>
+                {action.count != null && (
+                  <span className="ml-auto rounded-full bg-brand-600/10 px-2.5 py-1 text-[11px] font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+                    {action.count}
+                  </span>
+                )}
               </button>
             ))}
           </div>

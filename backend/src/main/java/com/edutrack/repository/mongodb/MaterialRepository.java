@@ -18,4 +18,6 @@ public interface MaterialRepository extends MongoRepository<StudyMaterial, Strin
     Page<StudyMaterial> findByClassIdAndSubjectIdAndTypeAndIsActiveTrue(String classId, String subjectId, String type, Pageable pageable);
 
     List<StudyMaterial> findByUploadedBy(String uploadedBy);
+
+    boolean existsByClassIdAndSubjectIdAndTitleIgnoreCaseAndIsActiveTrue(String classId, String subjectId, String title);
 }

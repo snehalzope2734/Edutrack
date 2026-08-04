@@ -28,13 +28,14 @@ public class ReportCardService {
     private final ExamTypeRepository examTypeRepository;
     private final UserRepository userRepository;
     private final CloudinaryService cloudinaryService;
+    private final ReportCardPdfService reportCardPdfService;
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> listForStudent(UUID studentId) {
-    	return reportCardRepository.findByStudent_Id(studentId)
-    	        .stream()
-    	        .map(this::toDto)
-    	        .toList();
+        return reportCardRepository.findByStudent_Id(studentId)
+                .stream()
+                .map(this::toDto)
+                .toList();
     }
 
     @Transactional
@@ -42,63 +43,42 @@ public class ReportCardService {
             ReportCardRequest req,
             UUID uploadedByUserId
     ) {
-
         Student student = studentRepository.findById(req.studentId())
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Student not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found"));
 
         ExamType examType = examTypeRepository.findById(req.examTypeId())
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Exam type not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Exam type not found"));
 
         User uploader = userRepository.findById(uploadedByUserId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        System.out.println("Searching existing report card...");
-        // Find latest report card for same student + exam + academic year
-        ReportCard reportCard = reportCardRepository
-                .findFirstByStudent_IdAndExamType_IdAndAcademicYearOrderByUploadedAtDesc(
-                        req.studentId(),
-                        req.examTypeId(),
-                        req.academicYear()
-                )
-                .orElse(null);
+        return persistReportCard(student, examType, uploader, req);
+    }
 
-        System.out.println("Found report card = " + reportCard);
+    @Transactional
+    public Map<String, Object> generateAndStore(ReportCardRequest req, UUID uploadedByUserId) {
+        Student student = studentRepository.findById(req.studentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found"));
 
-        if (reportCard != null) {
+        ExamType examType = examTypeRepository.findById(req.examTypeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Exam type not found"));
 
-            String oldPublicId = reportCard.getPdfCloudinaryPublicId();
+        User uploader = userRepository.findById(uploadedByUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-            reportCard.setPdfUrl(req.pdfCloudinaryUrl());
-            reportCard.setPdfCloudinaryPublicId(req.pdfCloudinaryPublicId());
-            reportCard.setUploadedBy(uploader);
+        byte[] pdfBytes = reportCardPdfService.generateReportCard(req.studentId(), req.examTypeId());
+        String publicId = "edutrack/report-cards/" + UUID.randomUUID();
+        String pdfUrl = cloudinaryService.uploadRawBytes(pdfBytes, "edutrack/report-cards", publicId);
 
-            reportCard = reportCardRepository.save(reportCard);
+        ReportCardRequest generatedRequest = new ReportCardRequest(
+                req.studentId(),
+                req.examTypeId(),
+                req.academicYear(),
+                pdfUrl,
+                publicId
+        );
 
-            if (oldPublicId != null
-                    && !oldPublicId.isBlank()
-                    && !oldPublicId.equals(req.pdfCloudinaryPublicId())) {
-
-                cloudinaryService.deleteAsset(oldPublicId);
-            }
-
-        } else {
-
-            reportCard = ReportCard.builder()
-                    .student(student)
-                    .examType(examType)
-                    .academicYear(req.academicYear())
-                    .pdfUrl(req.pdfCloudinaryUrl())
-                    .pdfCloudinaryPublicId(req.pdfCloudinaryPublicId())
-                    .uploadedBy(uploader)
-                    .build();
-
-            reportCard = reportCardRepository.save(reportCard);
-        }
-
-        return toDto(reportCard);
+        return persistReportCard(student, examType, uploader, generatedRequest);
     }
 
     @Transactional
@@ -117,8 +97,41 @@ public class ReportCardService {
         }
     }
 
-    private Map<String, Object> toDto(ReportCard r) {
+    private Map<String, Object> persistReportCard(Student student, ExamType examType, User uploader, ReportCardRequest req) {
+        ReportCard reportCard = reportCardRepository
+                .findFirstByStudent_IdAndExamType_IdAndAcademicYearOrderByUploadedAtDesc(
+                        req.studentId(),
+                        req.examTypeId(),
+                        req.academicYear()
+                )
+                .orElse(null);
 
+        if (reportCard != null) {
+            String oldPublicId = reportCard.getPdfCloudinaryPublicId();
+            reportCard.setPdfUrl(req.pdfCloudinaryUrl());
+            reportCard.setPdfCloudinaryPublicId(req.pdfCloudinaryPublicId());
+            reportCard.setUploadedBy(uploader);
+            reportCard = reportCardRepository.save(reportCard);
+
+            if (oldPublicId != null && !oldPublicId.isBlank() && !oldPublicId.equals(req.pdfCloudinaryPublicId())) {
+                cloudinaryService.deleteAsset(oldPublicId);
+            }
+        } else {
+            reportCard = ReportCard.builder()
+                    .student(student)
+                    .examType(examType)
+                    .academicYear(req.academicYear())
+                    .pdfUrl(req.pdfCloudinaryUrl())
+                    .pdfCloudinaryPublicId(req.pdfCloudinaryPublicId())
+                    .uploadedBy(uploader)
+                    .build();
+            reportCard = reportCardRepository.save(reportCard);
+        }
+
+        return toDto(reportCard);
+    }
+
+    private Map<String, Object> toDto(ReportCard r) {
         Map<String, Object> m = new LinkedHashMap<>();
 
         m.put("id", r.getId());
@@ -127,11 +140,10 @@ public class ReportCardService {
         m.put("examTypeName", r.getExamType().getName());
         m.put("academicYear", r.getAcademicYear());
         m.put("pdfUrl", r.getPdfUrl());
-
-        // Add this line
         m.put("pdfCloudinaryPublicId", r.getPdfCloudinaryPublicId());
-
         m.put("uploadedAt", r.getUploadedAt());
+        m.put("uploadedById", r.getUploadedBy() != null ? r.getUploadedBy().getId() : null);
+        m.put("uploadedByName", r.getUploadedBy() != null ? r.getUploadedBy().getName() : "Teacher");
 
         return m;
     }

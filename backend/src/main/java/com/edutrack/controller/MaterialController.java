@@ -8,6 +8,7 @@ import com.edutrack.service.MaterialService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -30,14 +31,16 @@ public class MaterialController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ownershipGuard.assertCanViewClass(UUID.fromString(classId));
-        return ResponseEntity.ok(materialService.list(classId, subjectId, type, PageRequest.of(page, size)));
+        return ResponseEntity.ok(materialService.list(
+                classId,
+                subjectId,
+                type,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "uploadedAt"))));
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
     public ResponseEntity<StudyMaterial> create(@RequestBody MaterialRequest request) {
-        // A teacher could otherwise upload "for" any class/subject just by putting
-        // arbitrary ids in the request body — verify they actually teach it.
         if (CurrentUser.isTeacher()) {
             ownershipGuard.assertOwnsSubject(request.subjectId());
             ownershipGuard.assertCanViewClass(request.classId());

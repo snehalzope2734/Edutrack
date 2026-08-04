@@ -39,9 +39,31 @@ public class ChangeRequest {
     @Column(columnDefinition = "TEXT")
     private String reason;
 
+    @Column(name = "attachment_names", columnDefinition = "TEXT")
+    private String attachmentNames;
+
     @Column(length = 20)
     @Builder.Default
-    private String status = "PENDING"; // PENDING, APPROVED, REJECTED
+    private String status = "PENDING";
+
+    @Column(name = "verification_status", length = 30)
+    @Builder.Default
+    private String verificationStatus = "PENDING";
+
+    @Column(name = "teacher_comment", columnDefinition = "TEXT")
+    private String teacherComment;
+
+    @Column(name = "teacher_recommendation", columnDefinition = "TEXT")
+    private String teacherRecommendation;
+
+    @Column(name = "admin_comment", columnDefinition = "TEXT")
+    private String adminComment;
+
+    @Column(name = "forwarded_to_admin_at")
+    private Instant forwardedToAdminAt;
+
+    @Column(name = "audit_log", columnDefinition = "TEXT")
+    private String auditLog;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reviewed_by")
@@ -57,5 +79,9 @@ public class ChangeRequest {
     protected void onCreate() {
         createdAt = Instant.now();
         if (status == null) status = "PENDING";
+        if (verificationStatus == null) verificationStatus = "PENDING";
+        if (auditLog == null || auditLog.isBlank()) {
+            auditLog = "Student submitted request";
+        }
     }
 }

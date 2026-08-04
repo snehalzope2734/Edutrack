@@ -41,10 +41,18 @@ public class ReportCardController {
         return ResponseEntity.ok(reportCardService.create(request, CurrentUser.id()));
     }
 
+    @PostMapping("/generate")
+    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    public ResponseEntity<Map<String, Object>> generateAndStore(@RequestBody ReportCardRequest request) {
+        if (CurrentUser.isTeacher()) {
+            ownershipGuard.assertCanViewStudent(request.studentId());
+        }
+        return ResponseEntity.ok(reportCardService.generateAndStore(request, CurrentUser.id()));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        // Deletion ownership (uploader vs admin) is enforced inside ReportCardService.
         reportCardService.delete(id, CurrentUser.id(), CurrentUser.isAdmin());
         return ResponseEntity.noContent().build();
     }
@@ -61,7 +69,7 @@ public class ReportCardController {
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=report-card.pdf")
+                        "inline; filename=report-card-openpdf.pdf")
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(pdf);
     }
