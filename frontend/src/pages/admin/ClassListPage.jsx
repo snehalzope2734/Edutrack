@@ -280,70 +280,82 @@ export default function ClassListPage() {
 
       {/* STEP 4: Edit Class Modal */}
       {editingClass && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30">
-          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-semibold">
-              Edit Class
-            </h2>
-            <form
-              onSubmit={updateClass}
-              className="space-y-3"
-            >
-              <input
-                value={editForm.className}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    className: e.target.value,
-                  })
-                }
-                className="w-full rounded border p-2 text-sm"
-              />
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Edit Class</h2>
+              <button type="button" onClick={() => setEditingClass(null)}>
+                <X className="h-5 w-5 text-slate-400" />
+              </button>
+            </div>
+            <form onSubmit={updateClass} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Class</label>
+                  <input
+                    required
+                    value={editForm.className}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        className: e.target.value,
+                      })
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
 
-              <input
-                value={editForm.section}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    section: e.target.value,
-                  })
-                }
-                className="w-full rounded border p-2 text-sm"
-              />
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Section</label>
+                  <input
+                    required
+                    value={editForm.section}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        section: e.target.value,
+                      })
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
 
-              <input
-                value={editForm.academicYear}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    academicYear: e.target.value,
-                  })
-                }
-                className="w-full rounded border p-2 text-sm"
-              />
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Academic year</label>
+                <input
+                  required
+                  value={editForm.academicYear}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      academicYear: e.target.value,
+                    })
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
 
-              <select
-                value={editForm.classTeacherId}
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    classTeacherId: e.target.value,
-                  })
-                }
-                className="w-full rounded border p-2 text-sm"
-              >
-                <option value="">
-                  None
-                </option>
-                {teachers.map((t) => (
-                  <option
-                    key={t.id}
-                    value={t.id}
-                  >
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Class teacher (optional)</label>
+                <select
+                  value={editForm.classTeacherId}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      classTeacherId: e.target.value,
+                    })
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="">None</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
@@ -356,7 +368,7 @@ export default function ClassListPage() {
 
                 <button
                   disabled={updating}
-                  className="rounded bg-blue-600 px-4 py-2 text-white text-sm font-medium disabled:opacity-60"
+                  className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
                 >
                   {updating ? "Saving..." : "Save"}
                 </button>
