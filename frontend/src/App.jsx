@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, GraduationCap, Layers, Megaphone, Bell, CalendarClock,
   BookOpen, ClipboardList, FileText, FileDown, CalendarDays, UserCheck, School, ListChecks,
+  BarChart3,
 } from "lucide-react";
 
 import ProtectedRoute from "./components/common/ProtectedRoute";
@@ -12,6 +13,7 @@ import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminChartsPage from "./pages/admin/AdminChartsPage";
 import TeacherListPage from "./pages/admin/TeacherListPage";
 import StudentListPage from "./pages/admin/StudentListPage";
 import ClassListPage from "./pages/admin/ClassListPage";
