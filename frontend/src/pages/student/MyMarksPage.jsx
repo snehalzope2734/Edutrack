@@ -22,7 +22,6 @@ import {
   Calculator,
   ChartColumnBig,
   Download,
-  Filter,
   GraduationCap,
   Medal,
   Printer,
@@ -88,13 +87,8 @@ const statusClass = (status) => {
 export default function MyMarksPage() {
   const [summary, setSummary] = useState(null);
   const [all, setAll] = useState([]);
+  const [selectedExamTypeId, setSelectedExamTypeId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    academicYear: "All Years",
-    exam: "All Exams",
-    subject: "All Subjects",
-    semester: "All Semesters",
-  });
 
   useEffect(() => {
     (async () => {
@@ -105,8 +99,11 @@ export default function MyMarksPage() {
           marksApi.studentMarks(me.studentId, {}),
         ]);
 
+        const normalized = (allRes.data || []).map((record) => ({ ...record, marksObtained: Number(record.marksObtained ?? 0), maxMarks: Number(record.maxMarks ?? 0) }));
         setSummary(summaryRes.data || { overall: 0, subjectWise: [] });
-        setAll((allRes.data || []).map((record) => ({ ...record, marksObtained: Number(record.marksObtained ?? 0), maxMarks: Number(record.maxMarks ?? 0) })));
+        setAll(normalized);
+        const firstExamId = normalized.find((record) => record.examTypeId)?.examTypeId || "";
+        setSelectedExamTypeId(firstExamId);
       } catch (error) {
         console.error("Failed to fetch marks data", error);
         setSummary({ overall: 0, subjectWise: [] });
@@ -117,20 +114,21 @@ export default function MyMarksPage() {
     })();
   }, []);
 
-  const examOptions = useMemo(() => ["All Exams", ...new Set(all.map((record) => record.examTypeName).filter(Boolean))], [all]);
-  const subjectOptions = useMemo(() => ["All Subjects", ...new Set(all.map((record) => record.subjectName).filter(Boolean))], [all]);
+  const filteredRecords = useMemo(() => all, [all]);
 
-  const filteredRecords = useMemo(() => {
-    return all.filter((record) => {
-      const examMatch = filters.exam === "All Exams" || record.examTypeName === filters.exam;
-      const subjectMatch = filters.subject === "All Subjects" || record.subjectName === filters.subject;
-      const semesterMatch = filters.semester === "All Semesters"
-        || (filters.semester === "Term 1" && /term|unit/i.test(record.examTypeName || ""))
-        || (filters.semester === "Mid Term" && /mid|half|unit/i.test(record.examTypeName || ""))
-        || (filters.semester === "Final" && /final|annual|semester/i.test(record.examTypeName || ""));
-      return examMatch && subjectMatch && semesterMatch;
+  const examOptions = useMemo(() => {
+    const map = new Map();
+    all.forEach((record) => {
+      if (record.examTypeId && !map.has(record.examTypeId)) {
+        map.set(record.examTypeId, record.examTypeName || "Exam");
+      }
     });
-  }, [all, filters]);
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [all]);
+
+  const selectedExamName = useMemo(() => {
+    return examOptions.find((item) => item.id === selectedExamTypeId)?.name || examOptions[0]?.name || "Exam";
+  }, [examOptions, selectedExamTypeId]);
 
   const subjectStats = useMemo(() => {
     const map = {};
@@ -299,9 +297,8 @@ export default function MyMarksPage() {
   const marksToTarget = Math.max(0, goalTarget - overall) * 0.8;
 
   const handleReportAction = async (type) => {
-    if (!filteredRecords.length) return;
-    const examId = filteredRecords[0]?.examTypeId;
-    if (!examId) return;
+    if (!selectedExamTypeId) return;
+    const examId = selectedExamTypeId;
 
     try {
       const { data } = await reportCardApi.downloadPdf((await studentApi.me()).data.studentId, examId);
@@ -370,45 +367,33 @@ export default function MyMarksPage() {
               <p className="text-xs uppercase tracking-[0.2em] text-blue-100">Latest Exam</p>
               <p className="mt-2 text-lg font-bold">{latestExam}</p>
             </div>
-            <div className="col-span-2 flex gap-2 pt-1">
-              <button onClick={() => handleReportAction("view")} className="flex-1 rounded-xl bg-white px-3.5 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50">View Report Card</button>
-              <button onClick={() => handleReportAction("download")} className="flex-1 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15">Download PDF</button>
-              <button onClick={() => handleReportAction("print")} className="rounded-xl border border-white/20 bg-white/10 p-2.5 text-white transition hover:bg-white/15">
-                <Printer className="h-4 w-4" />
-              </button>
+            <div className="col-span-2 space-y-3 pt-1">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-sm font-medium text-white">Select exam report</span>
+                <select
+                  value={selectedExamTypeId}
+                  onChange={(e) => setSelectedExamTypeId(e.target.value)}
+                  className="rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-sm font-medium text-white outline-none transition focus:border-white focus:bg-white/20"
+                >
+                  {examOptions.map((option) => (
+                    <option key={option.id} value={option.id} className="bg-white text-slate-900">
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button disabled={!selectedExamTypeId} onClick={() => handleReportAction("view")} className="flex-1 rounded-xl bg-white px-3.5 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400">View Report Card</button>
+                <button disabled={!selectedExamTypeId} onClick={() => handleReportAction("download")} className="flex-1 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-300 disabled:bg-slate-600/20">Download PDF</button>
+                <button disabled={!selectedExamTypeId} onClick={() => handleReportAction("print")} className="rounded-xl border border-white/20 bg-white/10 p-2.5 text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-300 disabled:bg-slate-600/20">
+                  <Printer className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-2 text-slate-600">
-          <Filter className="h-4 w-4 text-blue-600" />
-          <span className="text-sm font-medium">Filters</span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {[
-            { key: "academicYear", label: "Academic Year", options: ["All Years", "2024-25", "2025-26"] },
-            { key: "exam", label: "Exam", options: examOptions },
-            { key: "subject", label: "Subject", options: subjectOptions },
-            { key: "semester", label: "Semester", options: ["All Semesters", "Term 1", "Mid Term", "Final"] },
-          ].map((filter) => (
-            <label key={filter.key} className="flex flex-col gap-1 text-xs font-medium text-slate-500">
-              {filter.label}
-              <select
-                value={filters[filter.key]}
-                onChange={(event) => setFilters((prev) => ({ ...prev, [filter.key]: event.target.value }))}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-300 focus:bg-white"
-              >
-                {filter.options.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </label>
-          ))}
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[

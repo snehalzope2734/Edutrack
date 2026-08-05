@@ -13,7 +13,6 @@ import {
   Loader2,
   MapPin,
   Plus,
-  Search,
   Sparkles,
   Trash2,
   XCircle,
@@ -49,7 +48,6 @@ export default function ExamManagementPage() {
   const [schedule, setSchedule] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("schedule");
-  const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -111,14 +109,13 @@ export default function ExamManagementPage() {
 
   const filteredSchedule = useMemo(() => {
     return schedule.filter((item) => {
-      const matchesSearch = !searchTerm || [item.subjectName, item.examTypeName, item.venue].join(" ").toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === "all" || getStatusBadge(item.examDate, item.startTime).label.toLowerCase() === statusFilter;
       const matchesType = typeFilter === "all" || item.examTypeName?.toLowerCase() === typeFilter.toLowerCase();
       const matchesDateFrom = !dateFrom || item.examDate >= dateFrom;
       const matchesDateTo = !dateTo || item.examDate <= dateTo;
-      return matchesSearch && matchesStatus && matchesType && matchesDateFrom && matchesDateTo;
+      return matchesStatus && matchesType && matchesDateFrom && matchesDateTo;
     });
-  }, [schedule, searchTerm, statusFilter, typeFilter, dateFrom, dateTo]);
+  }, [schedule, statusFilter, typeFilter, dateFrom, dateTo]);
 
   const duplicateTypeName = useMemo(() => {
     const candidate = typeForm.name.trim().toLowerCase();
@@ -351,9 +348,6 @@ export default function ExamManagementPage() {
                 <p className="text-lg font-semibold text-slate-900">Exam Types</p>
                 <p className="text-sm text-slate-500">Create and manage grade categories for this class.</p>
               </div>
-              <button onClick={() => resetTypeForm()} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700">
-                <Plus className="h-4 w-4" /> Add exam type
-              </button>
             </div>
           </div>
 
@@ -388,7 +382,7 @@ export default function ExamManagementPage() {
 
             {types.length === 0 ? (
               <div className="mt-5">
-                <EmptyState title="No exam types created yet" description="Create UT-1, Half Yearly or Annual to begin planning your assessments." action={<button onClick={() => resetTypeForm()} className="rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white">Create exam type</button>} />
+                <EmptyState title="No exam types created yet" description="Use the form above to add UT-1, Half Yearly, or Annual exam categories." />
               </div>
             ) : (
               <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
@@ -501,55 +495,6 @@ export default function ExamManagementPage() {
                 </div>
               </div>
             </form>
-
-            <div className="mt-5 rounded-2xl border border-slate-200 p-4">
-              <div className="flex flex-wrap gap-3">
-                <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <Search className="h-4 w-4 text-slate-400" />
-                  <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search subject or venue" className="w-full appearance-none border-0 bg-transparent p-0 text-sm outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0" />
-                </div>
-                <div className="flex min-w-[180px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <Filter className="h-4 w-4 text-slate-400" />
-                  <div className="flex-1">
-                    <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full border-0 bg-transparent p-0 text-sm outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0">
-                      <option value="all">All exam types</option>
-                      {types.map((type) => <option key={type.id} value={type.name}>{type.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 transition focus-within:border-brand-500 focus-within:bg-white">
-                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border-0 bg-transparent p-0 text-sm text-slate-700 outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0">
-                    <option value="all">All status</option>
-                    <option value="upcoming">Upcoming</option>
-                    <option value="today">Today</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </div>
-                <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition focus-within:border-brand-500 focus-within:bg-white">
-                  <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
-                  <span className="whitespace-nowrap text-xs font-medium">From</span>
-                  <input
-                    type="date"
-                    aria-label="Filter schedules from date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="min-w-0 appearance-none border-0 bg-transparent p-0 text-sm text-slate-700 outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0"
-                  />
-                </label>
-                <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition focus-within:border-brand-500 focus-within:bg-white">
-                  <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
-                  <span className="whitespace-nowrap text-xs font-medium">To</span>
-                  <input
-                    type="date"
-                    aria-label="Filter schedules to date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="min-w-0 appearance-none border-0 bg-transparent p-0 text-sm text-slate-700 outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0"
-                  />
-                </label>
-                <button onClick={() => { setSearchTerm(""); setStatusFilter("all"); setTypeFilter("all"); setDateFrom(""); setDateTo(""); }} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600">Reset</button>
-              </div>
-            </div>
 
             {view === "schedule" ? (
               <div className="mt-5">

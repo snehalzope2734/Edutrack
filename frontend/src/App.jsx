@@ -44,7 +44,6 @@ import ChangeRequestFormPage from "./pages/student/ChangeRequestFormPage";
 import NotificationsPage from "./pages/student/NotificationsPage";
 import TimetablePage from "./pages/student/TimetablePage";
 import StudyMaterialsPage from "./pages/student/StudyMaterialsPage";
-import StudentReportCardsPage from "./pages/student/ReportCardsPage";
 import ExamSchedulePage from "./pages/student/ExamSchedulePage";
 
 const adminNav = [
@@ -79,7 +78,6 @@ const studentNav = [
   { to: "/student/marks", label: "Marks", icon: ClipboardList },
   { to: "/student/timetable", label: "Timetable", icon: CalendarDays },
   { to: "/student/materials", label: "Study Materials", icon: BookOpen },
-  { to: "/student/report-cards", label: "Report Cards", icon: FileDown },
   { to: "/student/exam-schedule", label: "Exam Schedule", icon: FileText },
   { to: "/student/notifications", label: "Notifications", icon: Bell },
   { to: "/student/profile", label: "My Profile", icon: Users },
@@ -135,7 +133,6 @@ export default function App() {
           <Route path="/student/notifications" element={<NotificationsPage />} />
           <Route path="/student/timetable" element={<TimetablePage />} />
           <Route path="/student/materials" element={<StudyMaterialsPage />} />
-          <Route path="/student/report-cards" element={<StudentReportCardsPage />} />
           <Route path="/student/exam-schedule" element={<ExamSchedulePage />} />
         </Route>
       </Route>

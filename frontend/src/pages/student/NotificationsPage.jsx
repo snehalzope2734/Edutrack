@@ -123,7 +123,7 @@ export default function NotificationsPage() {
 
   const getRoute = (notification) => {
     const text = `${notification.title || ""} ${notification.message || ""}`.toLowerCase();
-    if (text.includes("report card")) return `${basePath}/report-cards`;
+    if (text.includes("report card")) return `${basePath}/marks`;
     if (text.includes("material") || text.includes("study")) return `${basePath}/materials`;
     if (text.includes("mark") || text.includes("marks")) return `${basePath}/marks`;
     if (text.includes("attendance")) return `${basePath}/attendance`;

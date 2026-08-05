@@ -173,7 +173,7 @@ export default function StudentDashboard() {
   const actionCards = useMemo(
     () => [
       { label: "View Timetable", icon: CalendarDays, route: "/student/timetable" },
-      { label: "View Report Card", icon: FileText, route: "/student/report-cards" },
+      { label: "View Report Card", icon: FileText, route: "/student/marks" },
       { label: "Study Materials", icon: BookOpen, route: "/student/materials", count: materialsCount },
       { label: "Attendance", icon: ClipboardList, route: "/student/attendance" },
       { label: "Marks", icon: ChartBar, route: "/student/marks" },

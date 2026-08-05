@@ -15,7 +15,6 @@ import {
   Printer,
   Save,
   Search,
-  Sparkles,
   Target,
   Trash2,
 } from "lucide-react";
@@ -65,7 +64,6 @@ export default function TimetableBuilderPage() {
   const [classes, setClasses] = useState([]);
   const [classId, setClassId] = useState("");
   const [classSearch, setClassSearch] = useState("");
-  const [selectedClass, setSelectedClass] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [grid, setGrid] = useState({});
   const [loading, setLoading] = useState(true);
@@ -75,7 +73,6 @@ export default function TimetableBuilderPage() {
   const [clipboard, setClipboard] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightKey, setHighlightKey] = useState(null);
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
   const [editingCell, setEditingCell] = useState(null);
   const initialGrid = useRef({});
 
@@ -90,9 +87,10 @@ export default function TimetableBuilderPage() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await adminApi.listClasses();
-        setClasses(data);
-        if (data.length) setClassId(data[0].id);
+        const response = await adminApi.listClasses();
+        const classData = Array.isArray(response.data) ? response.data : [];
+        setClasses(classData);
+        if (classData.length) setClassId(classData[0].id);
       } catch (err) {
         toast.error("Unable to load classes");
       } finally {
@@ -106,13 +104,13 @@ export default function TimetableBuilderPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [classList, subjectsRes, timetableRes] = await Promise.all([
+        const [classListRes, subjectsRes, timetableRes] = await Promise.all([
           adminApi.listClasses(),
-          adminApi.listSubjects(classId),
+          adminApi.listSubjects({ classId }),
           adminApi.getTimetable(classId),
         ]);
-        setClasses(classList);
-        setSelectedClass(classList.find((klass) => klass.id === classId));
+        const classListData = Array.isArray(classListRes.data) ? classListRes.data : [];
+        setClasses(classListData);
         setSubjects(subjectsRes.data);
         const g = {};
         timetableRes.data.forEach((slot) => {
@@ -186,32 +184,6 @@ export default function TimetableBuilderPage() {
     setEditingCell(getSlotKey(day, period));
   };
 
-  const handleAutoGenerate = () => {
-    if (!subjects.length) {
-      return toast.error("Add subjects to generate a timetable.");
-    }
-    const next = { ...grid };
-    const assignmentList = subjects.filter((subject) => subject.teacherName).length ? subjects : subjects.slice();
-    let index = 0;
-    for (const day of DAYS) {
-      for (const period of PERIODS) {
-        if (BREAK_PERIODS[period]) continue;
-        const subject = assignmentList[index % assignmentList.length];
-        next[getSlotKey(day, period)] = {
-          subjectId: subject.id,
-          startTime: PERIOD_TIMINGS[period].split(" - ")[0],
-          endTime: PERIOD_TIMINGS[period].split(" - ")[1],
-          subjectName: subject.name,
-          teacherName: subject.teacherName,
-        };
-        index += 1;
-      }
-    }
-    setUndoStack((prev) => [...prev, grid]);
-    setGrid(next);
-    setPendingChanges((count) => count + 1);
-    toast.success("Timetable auto-generated. Review before saving.");
-  };
 
   const warnDuplicateSubject = () => {
     const warnings = [];
@@ -370,7 +342,8 @@ export default function TimetableBuilderPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${selectedClass?.className || "timetable"}.csv`;
+    const currentClass = classes.find((klass) => klass.id === classId);
+    link.download = `${currentClass?.className || "timetable"}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -425,8 +398,6 @@ export default function TimetableBuilderPage() {
     return Object.entries(workload).map(([teacherName, data]) => ({ teacherName, ...data }));
   }, [grid]);
 
-  const classLabel = selectedClass ? `${selectedClass.className}${selectedClass.section}` : "Select class";
-
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -436,12 +407,6 @@ export default function TimetableBuilderPage() {
         subtitle="Create and manage the weekly timetable."
         action={
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={handleAutoGenerate}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              <Sparkles className="h-4 w-4" /> Auto Generate
-            </button>
             <button
               onClick={saveTimetable}
               disabled={saving}
@@ -455,11 +420,11 @@ export default function TimetableBuilderPage() {
 
       <div>
         <section className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[1.5fr_1fr]">
+          <div className="grid gap-3 md:grid-cols-1">
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Class</p>
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="w-full">
+              <div className="mt-4 space-y-4">
+                <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Choose class</label>
                   <div className="relative">
                     <input
@@ -474,13 +439,14 @@ export default function TimetableBuilderPage() {
                     </div>
                   </div>
                 </div>
-                <div className="w-full sm:w-64">
-                  <label className="mb-2 block text-sm font-medium text-slate-700">Selected class</label>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Choose class</label>
                   <select
                     value={classId}
                     onChange={(e) => setClassId(e.target.value)}
                     className="w-full cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                   >
+                    <option value="">Choose class</option>
                     {filteredClasses.map((klass) => (
                       <option key={klass.id} value={klass.id}>
                         {klass.className}{klass.section} • {klass.academicYear}
