@@ -78,9 +78,9 @@ export default function ExamManagementPage() {
   const loadClassData = async (cid) => {
     if (!cid) return;
     setLoading(true);
-    try {
+      try {
       const [subjectsRes, typesRes, scheduleRes] = await Promise.all([
-        adminApi.listSubjects(cid),
+        adminApi.listSubjects({ classId: cid }),
         adminApi.listExamTypes({ classId: cid }),
         adminApi.listExamSchedule(cid),
       ]);
