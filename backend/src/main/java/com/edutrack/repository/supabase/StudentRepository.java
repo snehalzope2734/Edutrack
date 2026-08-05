@@ -39,4 +39,7 @@ public interface StudentRepository extends JpaRepository<Student, UUID> {
                  s.rollNumber
         """)
     Page<Student> search(UUID classId, String search, Pageable pageable);
+
+    // --- Newly Added Method ---
+    long countByClassEntityId(UUID classId);
 }

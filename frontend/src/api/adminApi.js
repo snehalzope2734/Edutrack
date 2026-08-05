@@ -2,6 +2,9 @@
 import api from "./axiosConfig";
 
 export const adminApi = {
+  // Dashboard
+  getDashboard: () => api.get("/admin/dashboard"),
+
   // Teachers
   listTeachers: (params) => api.get("/admin/teachers", { params }),
   createTeacher: (data) => api.post("/admin/teachers", data),

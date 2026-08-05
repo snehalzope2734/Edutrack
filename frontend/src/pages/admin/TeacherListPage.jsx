@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Eye, EyeOff, Plus, X } from "lucide-react";
 import toast from "react-hot-toast";
 import PageHeader from "../../components/common/PageHeader";
 import DataTable from "../../components/common/DataTable";
@@ -20,6 +20,16 @@ const emptyForm = {
   assignedSubjects: [],
 };
 
+const QUALIFICATION_OPTIONS = ["B.Ed", "M.Ed", "B.Sc", "M.Sc", "B.A", "M.A", "B.Com", "M.Com", "BCA", "MCA", "B.Tech", "M.Tech", "PhD"];
+const DESIGNATION_OPTIONS = ["Teacher", "Senior Teacher", "Class Teacher", "Vice Principal", "Principal", "Sports Teacher", "Music Teacher", "Art Teacher", "Computer Teacher"];
+const SUBJECT_OPTIONS = ["Mathematics", "Science", "English", "Hindi", "Social Science", "Computer", "Sanskrit", "Art", "Music", "Physical Education", "GK"];
+
+const dropdownOptions = {
+  qualification: QUALIFICATION_OPTIONS,
+  designation: DESIGNATION_OPTIONS,
+  department: SUBJECT_OPTIONS,
+};
+
 export default function TeacherListPage() {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +39,8 @@ export default function TeacherListPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize] = useState(100);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [customDropdowns, setCustomDropdowns] = useState({});
 
   const load = async (searchTerm = search, currentPage = page) => {
     setLoading(true);
@@ -110,6 +122,7 @@ export default function TeacherListPage() {
       }
       setShowForm(false);
       setForm(emptyForm);
+      setCustomDropdowns({});
       load(search, 0);
     } catch (err) {
       toast.error(err.response?.data?.message || "Operation failed");
@@ -143,6 +156,7 @@ export default function TeacherListPage() {
         isActive: data.isActive ?? true,
         employeeCode: data.employeeCode || "",
       });
+      setCustomDropdowns({});
       setShowForm(true);
     } catch {
       toast.error("Could not fetch teacher details for editing");
@@ -158,10 +172,22 @@ export default function TeacherListPage() {
     ["email", "Email"],
     ...(!form.id ? [["password", "Password"]] : []),
     ["phone", "Phone"],
-    ["department", "Department"],
+    ["department", "Subject / Department"],
     ["designation", "Designation"],
     ["qualification", "Qualification"],
   ], [form.id]);
+
+  const isCustomDropdownValue = (key) => {
+    const value = form[key]?.trim();
+    return Boolean(customDropdowns[key]) || (Boolean(value) && !dropdownOptions[key]?.includes(value));
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setForm(emptyForm);
+    setCustomDropdowns({});
+    setPasswordVisible(false);
+  };
 
   return (
     <div>
@@ -170,7 +196,7 @@ export default function TeacherListPage() {
         subtitle={`Manage teaching staff · ${totalTeachers} teacher${totalTeachers === 1 ? "" : "s"}`}
         action={
           <button 
-            onClick={() => { setForm(emptyForm); setShowForm(true); }} 
+            onClick={() => { setForm(emptyForm); setCustomDropdowns({}); setPasswordVisible(false); setShowForm(true); }} 
             className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >
             <Plus className="h-4 w-4" /> Add Teacher
@@ -249,11 +275,21 @@ export default function TeacherListPage() {
       )}
 
       {showForm && (
-        <div className="fixed inset-0 z-20 overflow-y-auto flex items-center justify-center bg-black/30 px-4 py-6">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div
+          className="fixed inset-0 z-20 flex items-center justify-center overflow-y-auto bg-black/30 px-4 py-6"
+          onClick={closeForm}
+          role="presentation"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">{form.id ? "Edit Teacher" : "Add Teacher"}</h2>
-              <button onClick={() => { setShowForm(false); setForm(emptyForm); }}>
+              <button
+                type="button"
+                onClick={closeForm}
+                aria-label="Close teacher form"
+                title="Close"
+                className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+              >
                 <X className="h-5 w-5 text-slate-400" />
               </button>
             </div>
@@ -265,11 +301,60 @@ export default function TeacherListPage() {
               return (
                 <div key={key}>
                   <label className="mb-1 block text-xs font-medium text-slate-600">{label}</label>
+                  {dropdownOptions[key] ? (
+                    <>
+                      <select
+                        required
+                        value={isCustomDropdownValue(key) ? "__custom__" : (form[key] || "")}
+                        onChange={(e) => {
+                          const isCustom = e.target.value === "__custom__";
+                          setCustomDropdowns((current) => ({ ...current, [key]: isCustom }));
+                          setForm({ ...form, [key]: isCustom ? "" : e.target.value });
+                        }}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      >
+                        <option value="">Select {label}</option>
+                        {dropdownOptions[key].map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                        <option value="__custom__">Other (add custom)</option>
+                      </select>
+                      {isCustomDropdownValue(key) ? (
+                        <input
+                          required
+                          type="text"
+                          value={form[key] || ""}
+                          onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                          placeholder={`Enter custom ${label.toLowerCase()}`}
+                          className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      ) : null}
+                    </>
+                  ) : key === "password" ? (
+                    <div className="relative">
+                      <input
+                        required
+                        type={passwordVisible ? "text" : "password"}
+                        autoComplete="new-password"
+                        value={form.password || ""}
+                        onChange={(e) => setForm({ ...form, password: e.target.value })}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPasswordVisible((visible) => !visible)}
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-500 hover:text-slate-700"
+                        aria-label={passwordVisible ? "Hide password" : "Show password"}
+                      >
+                        {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  ) : (
                   <input
                     required={!isEditing || key !== "password"}
                     readOnly={isReadOnly}
-                    type={key === "email" ? "email" : key === "password" ? "password" : key === "phone" ? "tel" : "text"}
-                    autoComplete={key === "password" ? "new-password" : key === "email" ? "email" : "off"}
+                    type={key === "email" ? "email" : key === "phone" ? "tel" : "text"}
+                    autoComplete={key === "email" ? "email" : "off"}
                     inputMode={key === "phone" ? "numeric" : undefined}
                     maxLength={key === "phone" ? 10 : undefined}
                     onInput={key === "phone" ? (e) => { e.target.value = e.target.value.replace(/\D/g, ""); } : undefined}
@@ -277,6 +362,7 @@ export default function TeacherListPage() {
                     onChange={(e) => setForm({ ...form, [key]: e.target.value })}
                     className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${isReadOnly ? "bg-slate-100 text-slate-500 cursor-not-allowed" : ""}`}
                   />
+                  )}
                 </div>
               );
             })}

@@ -41,12 +41,6 @@ function getStatusBadge(examDate, startTime) {
   return { label: "Upcoming", tone: "bg-sky-50 text-sky-700 ring-sky-200" };
 }
 
-function getWeightageTone(totalWeightage) {
-  if (totalWeightage > 100) return { label: "Over target", tone: "bg-rose-50 text-rose-700 ring-rose-200", bar: "bg-rose-500" };
-  if (totalWeightage >= 80) return { label: "Healthy", tone: "bg-amber-50 text-amber-700 ring-amber-200", bar: "bg-amber-500" };
-  return { label: "On track", tone: "bg-emerald-50 text-emerald-700 ring-emerald-200", bar: "bg-emerald-500" };
-}
-
 export default function ExamManagementPage() {
   const [classes, setClasses] = useState([]);
   const [classId, setClassId] = useState("");
@@ -107,8 +101,6 @@ export default function ExamManagementPage() {
   const summaryCards = useMemo(() => {
     const upcoming = schedule.filter((item) => getStatusBadge(item.examDate, item.startTime).label === "Upcoming").length;
     const completed = schedule.filter((item) => getStatusBadge(item.examDate, item.startTime).label === "Completed").length;
-    const totalWeightage = types.reduce((sum, type) => sum + (Number(type.weightagePct ?? type.weightage ?? 0) || 0), 0);
-
     return [
       { label: "Total Exam Types", value: types.length, icon: ListChecks, tone: "from-brand-600 to-brand-500" },
       { label: "Scheduled Exams", value: schedule.length, icon: CalendarDays, tone: "from-sky-600 to-sky-500" },
@@ -116,13 +108,6 @@ export default function ExamManagementPage() {
       { label: "Completed", value: completed, icon: CheckCircle2, tone: "from-slate-600 to-slate-500" },
     ];
   }, [schedule, types]);
-
-  const totalWeightage = useMemo(() => types.reduce((sum, type) => sum + (Number(type.weightagePct ?? type.weightage ?? 0) || 0), 0), [types]);
-  const weightageTone = useMemo(() => getWeightageTone(totalWeightage), [totalWeightage]);
-  const selectedClassLabel = useMemo(() => {
-    const selected = classes.find((item) => item.id === classId);
-    return selected ? `Class ${selected.className}${selected.section}` : "Select class";
-  }, [classId, classes]);
 
   const filteredSchedule = useMemo(() => {
     return schedule.filter((item) => {
@@ -334,7 +319,8 @@ export default function ExamManagementPage() {
         })}
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      {/* Exam weightage overview removed. */}
+      {/*
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-lg font-semibold text-slate-900">Exam weightage overview</p>
@@ -355,7 +341,7 @@ export default function ExamManagementPage() {
           </div>
           {totalWeightage > 100 && <p className="mt-3 text-sm font-medium text-rose-600">⚠ Total weightage exceeds 100%</p>}
         </div>
-      </div>
+      */}
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -520,23 +506,47 @@ export default function ExamManagementPage() {
               <div className="flex flex-wrap gap-3">
                 <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <Search className="h-4 w-4 text-slate-400" />
-                  <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search subject or venue" className="w-full bg-transparent text-sm outline-none" />
+                  <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search subject or venue" className="w-full appearance-none border-0 bg-transparent p-0 text-sm outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0" />
                 </div>
                 <div className="flex min-w-[180px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <Filter className="h-4 w-4 text-slate-400" />
-                  <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full bg-transparent text-sm outline-none">
-                    <option value="all">All exam types</option>
-                    {types.map((type) => <option key={type.id} value={type.name}>{type.name}</option>)}
+                  <div className="flex-1">
+                    <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full border-0 bg-transparent p-0 text-sm outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0">
+                      <option value="all">All exam types</option>
+                      {types.map((type) => <option key={type.id} value={type.name}>{type.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 transition focus-within:border-brand-500 focus-within:bg-white">
+                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border-0 bg-transparent p-0 text-sm text-slate-700 outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0">
+                    <option value="all">All status</option>
+                    <option value="upcoming">Upcoming</option>
+                    <option value="today">Today</option>
+                    <option value="completed">Completed</option>
                   </select>
                 </div>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none">
-                  <option value="all">All status</option>
-                  <option value="upcoming">Upcoming</option>
-                  <option value="today">Today</option>
-                  <option value="completed">Completed</option>
-                </select>
-                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none" />
-                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none" />
+                <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition focus-within:border-brand-500 focus-within:bg-white">
+                  <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
+                  <span className="whitespace-nowrap text-xs font-medium">From</span>
+                  <input
+                    type="date"
+                    aria-label="Filter schedules from date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="min-w-0 appearance-none border-0 bg-transparent p-0 text-sm text-slate-700 outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0"
+                  />
+                </label>
+                <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 transition focus-within:border-brand-500 focus-within:bg-white">
+                  <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
+                  <span className="whitespace-nowrap text-xs font-medium">To</span>
+                  <input
+                    type="date"
+                    aria-label="Filter schedules to date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="min-w-0 appearance-none border-0 bg-transparent p-0 text-sm text-slate-700 outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0"
+                  />
+                </label>
                 <button onClick={() => { setSearchTerm(""); setStatusFilter("all"); setTypeFilter("all"); setDateFrom(""); setDateTo(""); }} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600">Reset</button>
               </div>
             </div>

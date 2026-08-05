@@ -35,21 +35,52 @@ public class AdminSeeder implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        boolean adminExists = userRepository.findAll().stream().anyMatch(u -> "ADMIN".equals(u.getRole()));
-        if (adminExists) {
+        ensureDefaultAdmin();
+    }
+
+    private void ensureDefaultAdmin() {
+        User existingAdmin = userRepository.findByEmail(adminEmail)
+                .or(() -> userRepository.findAll().stream()
+                        .filter(u -> "ADMIN".equals(u.getRole()))
+                        .findFirst())
+                .orElse(null);
+
+        if (existingAdmin == null) {
+            User admin = User.builder()
+                    .name(adminName)
+                    .email(adminEmail)
+                    .passwordHash(passwordEncoder.encode(adminPassword))
+                    .role("ADMIN")
+                    .isActive(true)
+                    .build();
+            userRepository.save(admin);
+
+            log.warn("No ADMIN account existed — created one for '{}'.", adminEmail);
             return;
         }
 
-        User admin = User.builder()
-                .name(adminName)
-                .email(adminEmail)
-                .passwordHash(passwordEncoder.encode(adminPassword))
-                .role("ADMIN")
-                .isActive(true)
-                .build();
-        userRepository.save(admin);
+        boolean changed = false;
 
-        log.warn("No ADMIN account existed — created one for '{}'. " +
-                "Log in and change this password immediately if it used the default value.", adminEmail);
+        if (!adminEmail.equalsIgnoreCase(existingAdmin.getEmail())) {
+            existingAdmin.setEmail(adminEmail);
+            changed = true;
+        }
+        if (!adminName.equals(existingAdmin.getName())) {
+            existingAdmin.setName(adminName);
+            changed = true;
+        }
+        if (!passwordEncoder.matches(adminPassword, existingAdmin.getPasswordHash())) {
+            existingAdmin.setPasswordHash(passwordEncoder.encode(adminPassword));
+            changed = true;
+        }
+        if (!Boolean.TRUE.equals(existingAdmin.getIsActive())) {
+            existingAdmin.setIsActive(true);
+            changed = true;
+        }
+
+        if (changed) {
+            userRepository.save(existingAdmin);
+            log.warn("Updated the existing ADMIN account to the configured default credentials: {}.", adminEmail);
+        }
     }
 }

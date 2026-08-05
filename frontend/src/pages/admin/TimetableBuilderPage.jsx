@@ -431,9 +431,29 @@ export default function TimetableBuilderPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Timetable Builder" subtitle="Design and manage a modern school timetable with audit-ready controls." />
+      <PageHeader
+        title="Timetable Builder"
+        subtitle="Create and manage the weekly timetable."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleAutoGenerate}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              <Sparkles className="h-4 w-4" /> Auto Generate
+            </button>
+            <button
+              onClick={saveTimetable}
+              disabled={saving}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Timetable
+            </button>
+          </div>
+        }
+      />
 
-      <div className="grid gap-4 xl:grid-cols-[1.5fr_0.8fr]">
+      <div>
         <section className="space-y-4">
           <div className="grid gap-3 md:grid-cols-[1.5fr_1fr]">
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -471,131 +491,6 @@ export default function TimetableBuilderPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                { label: "Assigned Slots", value: assignedSlots, icon: Layers },
-                { label: "Free Slots", value: freeSlots, icon: Target },
-                { label: "Subjects Used", value: subjectsUsed, icon: Archive },
-                { label: "Teachers Involved", value: teachersInvolved, icon: Sparkles },
-              ].map((card) => (
-                <div key={card.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-brand-600">
-                      <card.icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-500">{card.label}</p>
-                      <p className="text-2xl font-semibold text-slate-900">{card.value}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-              <div className="space-y-2">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Actions</p>
-                <p className="text-sm text-slate-600">Use the action bar to save, auto-generate, copy, and export your timetable.</p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 xl:auto-cols-max xl:grid-flow-col">
-                <button
-                  onClick={handleAutoGenerate}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                >
-                  <Sparkles className="h-4 w-4" /> Auto Generate
-                </button>
-                <button
-                  onClick={saveTimetable}
-                  disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Timetable
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <button
-                type="button"
-                onClick={undoLastChange}
-                disabled={!undoStack.length}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-slate-300 disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2">
-                  <ArrowUpDown className="h-4 w-4" />
-                  <div>
-                    <p>Undo Last Change</p>
-                    <p className="text-xs text-slate-500">{undoStack.length} step(s)</p>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => resetDay(DAYS[0])}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-slate-300"
-              >
-                <div className="flex items-center gap-2">
-                  <Trash2 className="h-4 w-4" />
-                  <div>
-                    <p>Reset Day</p>
-                    <p className="text-xs text-slate-500">Clear one day at a time</p>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={resetAll}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-slate-300"
-              >
-                <div className="flex items-center gap-2">
-                  <Archive className="h-4 w-4" />
-                  <div>
-                    <p>Reset Entire Timetable</p>
-                    <p className="text-xs text-slate-500">Empty every slot</p>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={exportCsv}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-slate-300"
-              >
-                <div className="flex items-center gap-2">
-                  <Download className="h-4 w-4" />
-                  <div>
-                    <p>Export Excel</p>
-                    <p className="text-xs text-slate-500">Download CSV</p>
-                  </div>
-                </div>
-              </button>
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-medium text-slate-600">Copy / Paste</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button onClick={copyClass} className="rounded-2xl bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition hover:bg-slate-100">
-                    <Copy className="inline h-4 w-4" /> Copy Class
-                  </button>
-                  <button onClick={pasteClass} disabled={!clipboard?.type || clipboard.type !== "class"} className="rounded-2xl bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:opacity-50">
-                    <Clipboard className="inline h-4 w-4" /> Paste Class
-                  </button>
-                </div>
-              </div>
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-medium text-slate-600">Print</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button onClick={printTimetable} className="rounded-2xl bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition hover:bg-slate-100">
-                    <Printer className="inline h-4 w-4" /> Print Timetable
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
 
           {pendingChanges > 0 && (
@@ -605,149 +500,14 @@ export default function TimetableBuilderPage() {
             </div>
           )}
 
-          <div className="grid gap-4 xl:grid-cols-[1.4fr_0.85fr]">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Subject Legend</p>
-                  <p className="mt-2 text-sm text-slate-600">Color-coded subjects help teachers and coordinators scan the week quickly.</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {subjects.slice(0, 6).map((subject) => {
-                    const gradient = getSubjectColor(subject.name);
-                    return (
-                      <div key={subject.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
-                        <span className={`inline-flex items-center rounded-full bg-gradient-to-r ${gradient} px-2.5 py-1 text-white`}>
-                          {subject.name}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-4">
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Search</p>
-                <div className="mt-4 flex gap-3">
-                  <input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search subject or teacher"
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-                  />
-                  <button onClick={() => setSearchQuery("")} className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">
-                    <Search className="h-4 w-4" /> Clear
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Teacher Workload</p>
-                <div className="mt-4 space-y-4">
-                  {teacherWorkload.length === 0 ? (
-                    <p className="text-sm text-slate-500">No teacher assignments yet.</p>
-                  ) : (
-                    teacherWorkload.slice(0, 3).map((item) => (
-                      <div key={item.teacherName} className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                        <p className="font-semibold text-slate-900">{item.teacherName}</p>
-                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Weekly Total: {item.total} periods</p>
-                        <div className="mt-3 grid gap-2 text-sm text-slate-600">
-                          {Object.entries(item.days).map(([day, count]) => (
-                            <div key={day} className="flex items-center justify-between">
-                              <span>{day}</span>
-                              <span className="font-semibold text-slate-900">{count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Weekly Subject Statistics</p>
-            <div className="mt-4 space-y-4">
-              {subjectStats.length === 0 ? (
-                <p className="text-sm text-slate-500">No subjects assigned yet.</p>
-              ) : (
-                subjectStats.map((stat) => {
-                  const percent = Math.min(100, Math.round((stat.count / totalSlots) * 100));
-                  return (
-                    <div key={stat.subject?.id}>
-                      <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700">
-                        <span>{stat.subject?.name || "Unknown"}</span>
-                        <span>{stat.count} periods/week</span>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
-                        <div className="h-full rounded-full bg-brand-600" style={{ width: `${percent}%` }} />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </section>
-
-        <aside className="space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Details</p>
-            <div className="mt-4 space-y-3 text-sm text-slate-600">
-              <div className="flex items-center justify-between gap-2 rounded-2xl bg-slate-50 px-4 py-3">
-                <span>Class</span>
-                <strong className="text-slate-900">{classLabel}</strong>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-2xl bg-slate-50 px-4 py-3">
-                <span>Assigned</span>
-                <strong className="text-slate-900">{assignedSlots}</strong>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-2xl bg-slate-50 px-4 py-3">
-                <span>Free</span>
-                <strong className="text-slate-900">{freeSlots}</strong>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-2xl bg-slate-50 px-4 py-3">
-                <span>Subjects</span>
-                <strong className="text-slate-900">{subjects.length}</strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Clipboard</p>
-            <div className="mt-4 space-y-3 text-sm text-slate-600">
-              <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                <p className="font-medium text-slate-900">{clipboard ? clipboard.type === "class" ? "Class timetable copied" : `Day copied: ${clipboard.day}` : "Nothing copied"}</p>
-              </div>
-              {clipboard?.type === "day" && (
-                <button onClick={() => pasteDay(DAYS[0])} className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
-                  Paste into first day
-                </button>
-              )}
-            </div>
-          </div>
-        </aside>
-      </div>
+      </section>
+    </div>
 
       <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-slate-900">Weekly Timetable</p>
-              <p className="text-sm text-slate-500">Click any cell to assign a subject and teacher.</p>
-            </div>
-            <div className="hidden gap-2 md:flex">
-              <button type="button" onClick={() => copyDay(DAYS[0])} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-100">
-                Copy Monday
-              </button>
-              <button type="button" onClick={() => pasteDay(DAYS[1])} disabled={!clipboard || clipboard.type !== "day"} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-100 disabled:opacity-50">
-                Paste to Tuesday
-              </button>
-            </div>
+              <p className="text-sm text-slate-500">Click a timetable cell to choose a subject and its assigned teacher.</p>
           </div>
         </div>
 
@@ -832,8 +592,9 @@ export default function TimetableBuilderPage() {
               </tbody>
             </table>
           </div>
+        </div>
 
-          <div className="lg:hidden space-y-4 px-4 pb-6 pt-4">
+        <div className="lg:hidden space-y-4 px-4 pb-6 pt-4">
             {DAYS.map((day) => (
               <div key={day} className="rounded-[28px] border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-4 flex items-center justify-between">
@@ -841,9 +602,6 @@ export default function TimetableBuilderPage() {
                     <p className="font-semibold text-slate-900">{day}</p>
                     <p className="text-sm text-slate-500">Mobile friendly view</p>
                   </div>
-                  <button onClick={() => copyDay(day)} className="rounded-2xl bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition hover:bg-slate-100">
-                    Copy day
-                  </button>
                 </div>
                 <div className="space-y-3">
                   {PERIODS.map((period) => {
@@ -882,7 +640,6 @@ export default function TimetableBuilderPage() {
                 </div>
               </div>
             ))}
-          </div>
         </div>
       </div>
     </div>

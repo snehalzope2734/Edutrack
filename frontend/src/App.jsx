@@ -13,7 +13,6 @@ import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminChartsPage from "./pages/admin/AdminChartsPage";
 import TeacherListPage from "./pages/admin/TeacherListPage";
 import StudentListPage from "./pages/admin/StudentListPage";
 import ClassListPage from "./pages/admin/ClassListPage";
