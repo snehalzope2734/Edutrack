@@ -39,6 +39,11 @@ export default function TeacherListPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize] = useState(100);
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [deptTeachers, setDeptTeachers] = useState([]);
+  const [deptPage, setDeptPage] = useState(0);
+  const [deptTotalPages, setDeptTotalPages] = useState(0);
+  const [deptTotalElements, setDeptTotalElements] = useState(0);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [customDropdowns, setCustomDropdowns] = useState({});
 
@@ -52,8 +57,31 @@ export default function TeacherListPage() {
       });
       setTeachers(data.content ?? []);
       setPage(currentPage);
+      // Clear any department selection when reloading the main list
+      setSelectedDepartment(null);
     } catch {
       toast.error("Could not load teachers");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDepartment = async (department, pageIndex = 0) => {
+    setLoading(true);
+    try {
+      const { data } = await adminApi.listTeachers({
+        page: pageIndex,
+        size: pageSize,
+        search,
+        department,
+      });
+      setDeptTeachers(data.content ?? []);
+      setDeptPage(pageIndex);
+      setDeptTotalPages(data.totalPages ?? 0);
+      setDeptTotalElements(data.totalElements ?? (data.content ? data.content.length : 0));
+      setSelectedDepartment(department);
+    } catch (err) {
+      toast.error("Could not load department teachers");
     } finally {
       setLoading(false);
     }
@@ -231,8 +259,43 @@ export default function TeacherListPage() {
       {loading ? (
         <LoadingSpinner />
       ) : (
-        <DataTable
-          rows={teachers}
+        <>
+          {/* When no department selected show department cards */}
+          {!selectedDepartment ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              {Array.from(new Map(teachers.map(t => [t.department || "Unassigned", null]))).map(([dept]) => {
+                const count = teachers.filter((t) => (t.department || "Unassigned") === dept).length;
+                return (
+                  <button
+                    key={dept}
+                    onClick={() => loadDepartment(dept, 0)}
+                    className="group flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm hover:shadow-md"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">{dept}</p>
+                      <p className="mt-1 text-2xl font-semibold text-slate-900">{count}</p>
+                    </div>
+                    <div className="ml-4 flex items-center text-sm text-slate-400">View</div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <button onClick={() => { setSelectedDepartment(null); setDeptTeachers([]); load(search, 0); }} className="mr-3 rounded-lg px-3 py-2 text-sm border">Back</button>
+                <h3 className="text-lg font-semibold">{selectedDepartment} · {deptTotalElements} teacher{deptTotalElements === 1 ? "" : "s"}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button disabled={deptPage <= 0} onClick={() => loadDepartment(selectedDepartment, Math.max(0, deptPage - 1))} className="rounded-lg border px-3 py-2 text-sm">Prev</button>
+                <span className="text-sm text-slate-600">Page {deptPage + 1} / {Math.max(1, deptTotalPages)}</span>
+                <button disabled={deptPage >= (deptTotalPages - 1)} onClick={() => loadDepartment(selectedDepartment, deptPage + 1)} className="rounded-lg border px-3 py-2 text-sm">Next</button>
+              </div>
+            </div>
+          )}
+
+          <DataTable
+            rows={selectedDepartment ? deptTeachers : teachers}
           emptyMessage="No teachers found"
           columns={[
             { key: "name", header: "Name" },
