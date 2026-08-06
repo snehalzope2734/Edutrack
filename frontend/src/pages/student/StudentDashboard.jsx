@@ -16,18 +16,12 @@ import {
   ChartBar,
   BookOpen,
   CalendarDays,
-  Sparkles,
-  Trophy,
   ClipboardList,
-  ClipboardCheck,
   Clock3,
   Paperclip,
   Loader2,
   ArrowRight,
-  Star,
   ShieldCheck,
-  SunMedium,
-  Moon,
   ChevronRight,
   FileText,
 } from "lucide-react";
@@ -50,7 +44,6 @@ import { attendanceApi } from "../../api/attendanceApi";
 import { marksApi } from "../../api/marksApi";
 import { materialApi } from "../../api/materialApi";
 import { notificationApi } from "../../api/notificationApi";
-import { reportCardApi } from "../../api/reportCardApi";
 import { adminApi } from "../../api/adminApi";
 import { examApi } from "../../api/examApi";
 
@@ -66,102 +59,111 @@ function parseTime(value) {
   return isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function themeOptionLabel(name) {
-  return name === "system" ? "System" : name === "dark" ? "Dark" : "Light";
-}
-
 export default function StudentDashboard() {
   const [user, setUser] = useState(null);
   const [me, setMe] = useState(null);
   const [attendance, setAttendance] = useState(null);
   const [marks, setMarks] = useState(null);
-  const [weeklyRecords, setWeeklyRecords] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [materialsCount, setMaterialsCount] = useState(0);
   const [assignments, setAssignments] = useState([]);
-  const [reportCards, setReportCards] = useState([]);
   const [examSchedule, setExamSchedule] = useState([]);
   const [timetable, setTimetable] = useState([]);
-  const [theme, setTheme] = useState("system");
   const [loading, setLoading] = useState(true);
-  const [showCustomize, setShowCustomize] = useState(false);
-  const [visibleSections, setVisibleSections] = useState({
-    weeklyAttendance: true,
-    marksPerformance: true,
-    todayTimetable: true,
-    recentNotifications: true,
-    studyMaterials: true,
-    upcomingEvents: true,
-    reportCard: true,
-    academicProgress: true,
-    achievements: true,
-  });
+  const [apiError, setApiError] = useState("");
 
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const stored = window.localStorage.getItem("dashboard-theme");
-    if (stored) setTheme(stored);
-  }, []);
+  const loadDashboard = async () => {
+    setLoading(true);
+    setApiError("");
+    try {
+      const [userRes, meRes] = await Promise.all([userApi.me(), studentApi.me()]);
+      const userData = userRes.data;
+      const meData = meRes.data;
 
-  useEffect(() => {
-    const syncTheme = () => {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const useDark = theme === "dark" || (theme === "system" && prefersDark);
-      document.documentElement.classList.toggle("dark", useDark);
-    };
+      setUser(userData);
+      setMe(meData);
 
-    syncTheme();
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const listener = () => syncTheme();
-    mediaQuery.addEventListener?.("change", listener);
-    return () => mediaQuery.removeEventListener?.("change", listener);
-  }, [theme]);
+      const start = format(addDays(startOfDay(new Date()), -6), "yyyy-MM-dd");
+      const end = format(new Date(), "yyyy-MM-dd");
 
-  useEffect(() => {
-    const loadDashboard = async () => {
-      try {
-        const [userRes, meRes] = await Promise.all([userApi.me(), studentApi.me()]);
-        const userData = userRes.data;
-        const meData = meRes.data;
+      const results = await Promise.allSettled([
+        attendanceApi.studentSummary(meData.studentId),
+        marksApi.studentSummary(meData.studentId),
+        notificationApi.list({ page: 0, size: 5 }),
+        materialApi.list({ classId: meData.classId, page: 0, size: 6 }),
+        materialApi.list({ classId: meData.classId, type: "assignment", page: 0, size: 6 }),
+        adminApi.getTimetable(meData.classId),
+        examApi.listSchedule(meData.classId),
+      ]);
 
-        setUser(userData);
-        setMe(meData);
+      const [attendanceRes, marksRes, notifsRes, materialsRes, assignmentsRes, timetableRes, examRes] = results;
+      const failedSections = [];
 
-        const start = format(addDays(startOfDay(new Date()), -6), "yyyy-MM-dd");
-        const end = format(new Date(), "yyyy-MM-dd");
-
-        const [attendanceRes, marksRes, recordsRes, notifsRes, materialsRes, assignmentsRes, reportCardRes, timetableRes, examRes] =
-          await Promise.all([
-            attendanceApi.studentSummary(meData.studentId),
-            marksApi.studentSummary(meData.studentId),
-            attendanceApi.studentRecords(meData.studentId, { from: start, to: end }),
-            notificationApi.list({ page: 0, size: 5 }),
-            materialApi.list({ classId: meData.classId, page: 0, size: 6 }),
-            materialApi.list({ classId: meData.classId, type: "assignment", page: 0, size: 6 }),
-            reportCardApi.listForStudent(meData.studentId),
-            adminApi.getTimetable(meData.classId),
-            examApi.listSchedule(meData.classId),
-          ]);
-
-        setAttendance(attendanceRes.data);
-        setMarks(marksRes.data);
-        setWeeklyRecords(recordsRes.data || []);
-        setNotifications(notifsRes.data.content ?? []);
-        setMaterials(materialsRes.data.content ?? []);
-        setMaterialsCount(materialsRes.data.totalElements ?? materialsRes.data.content?.length ?? 0);
-        setAssignments(assignmentsRes.data.content ?? []);
-        setReportCards(reportCardRes.data ?? []);
-        setTimetable(timetableRes.data ?? []);
-        setExamSchedule(examRes.data ?? []);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
+      if (attendanceRes.status === "fulfilled") {
+        setAttendance(attendanceRes.value.data);
+      } else {
+        console.error("Attendance load failed", attendanceRes.reason);
+        failedSections.push("attendance");
       }
-    };
 
+      if (marksRes.status === "fulfilled") {
+        setMarks(marksRes.value.data);
+      } else {
+        console.error("Marks load failed", marksRes.reason);
+        failedSections.push("marks");
+      }
+
+      if (notifsRes.status === "fulfilled") {
+        setNotifications(notifsRes.value.data.content ?? []);
+      } else {
+        console.error("Notifications load failed", notifsRes.reason);
+        failedSections.push("notifications");
+      }
+
+      if (materialsRes.status === "fulfilled") {
+        setMaterials(materialsRes.value.data.content ?? []);
+        setMaterialsCount(materialsRes.value.data.totalElements ?? materialsRes.value.data.content?.length ?? 0);
+      } else {
+        console.error("Materials load failed", materialsRes.reason);
+        failedSections.push("materials");
+      }
+
+      if (assignmentsRes.status === "fulfilled") {
+        setAssignments(assignmentsRes.value.data.content ?? []);
+      } else {
+        console.error("Assignments load failed", assignmentsRes.reason);
+        failedSections.push("assignments");
+      }
+
+      if (timetableRes.status === "fulfilled") {
+        setTimetable(timetableRes.value.data ?? []);
+      } else {
+        console.error("Timetable load failed", timetableRes.reason);
+        failedSections.push("timetable");
+      }
+
+      if (examRes.status === "fulfilled") {
+        setExamSchedule(examRes.value.data ?? []);
+      } else {
+        console.error("Exam schedule load failed", examRes.reason);
+        failedSections.push("exam schedule");
+      }
+
+      if (failedSections.length > 0) {
+        setApiError(`Some dashboard data could not be loaded: ${failedSections.join(", ")}. Please refresh or try again later.`);
+      }
+    } catch (error) {
+      console.error(error);
+      setApiError("Unable to load student dashboard. Please refresh or try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadDashboard();
   }, []);
 
@@ -227,21 +229,6 @@ export default function StudentDashboard() {
     [attendancePercent, marksPercent, examSchedule, nextExam, unreadNotifications]
   );
 
-  const weeklyAttendance = useMemo(() => {
-    const days = Array.from({ length: 7 }, (_, idx) => addDays(startOfDay(new Date()), idx - 6));
-    return days.map((day) => {
-      const sameDay = weeklyRecords.filter((record) => format(new Date(record.date), "yyyy-MM-dd") === format(day, "yyyy-MM-dd"));
-      const status = sameDay.some((r) => r.status === "A")
-        ? "Absent"
-        : sameDay.some((r) => r.status === "L")
-        ? "Late"
-        : sameDay.some((r) => r.status === "P")
-        ? "Present"
-        : "No record";
-      return { label: format(day, "EEE"), status, count: sameDay.length ? 100 : 20 };
-    });
-  }, [weeklyRecords]);
-
   const marksData = useMemo(
     () =>
       (marks?.subjectWise ?? []).map((item) => ({
@@ -276,14 +263,6 @@ export default function StudentDashboard() {
         .sort((a, b) => a.examDateTime - b.examDateTime)
         .slice(0, 3),
     [examSchedule]
-  );
-
-  const latestReport = useMemo(
-    () =>
-      [...reportCards]
-        .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0) - new Date(a.uploadedAt || a.createdAt || 0))
-        .shift(),
-    [reportCards]
   );
 
   const latestMaterials = materials.slice(0, 4);
@@ -327,11 +306,7 @@ export default function StudentDashboard() {
 
   const attendanceRingClass = attendancePercent >= 90 ? ATTENDANCE_RING.green : attendancePercent >= 75 ? ATTENDANCE_RING.yellow : ATTENDANCE_RING.red;
 
-  const toggleTheme = () => {
-    const next = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
-    setTheme(next);
-    window.localStorage.setItem("dashboard-theme", next);
-  };
+  const isDarkTheme = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
 
   if (loading) {
     return (
@@ -347,8 +322,8 @@ export default function StudentDashboard() {
   }
 
   return (
-    <div className="min-h-screen space-y-8 pb-10 bg-slate-50 px-4 py-6 text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:px-6 lg:px-8">
-      <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
+    <div className="relative min-h-screen space-y-8 pb-10 bg-slate-50/95 px-4 py-6 text-slate-900 dark:bg-slate-950/95 dark:text-slate-100 sm:px-6 lg:px-8">
+      <div className="rounded-[2rem] border border-slate-200 bg-white/95 p-6 shadow-2xl shadow-slate-200/20 backdrop-blur-xl transition duration-200 dark:border-slate-800 dark:bg-slate-900/90 dark:shadow-slate-950/40">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
           <div className="space-y-4">
             <div className="flex items-center gap-4">
@@ -367,59 +342,29 @@ export default function StudentDashboard() {
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Class {me?.className || "—"} · Roll No. {me?.rollNumber || "—"}</p>
               </div>
             </div>
-            <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+            <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50/95 p-5 text-sm text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-300">
               <p className="font-semibold text-slate-900 dark:text-slate-100">Today is {format(new Date(), "EEEE, d MMMM yyyy")}</p>
               <p className="mt-2">Your personalized school dashboard has all key details in one place. Track attendance, marks, timetable and study resources at a glance.</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 justify-between xl:justify-end">
-            <button
-              onClick={() => setShowCustomize((value) => !value)}
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-            >
-              <Sparkles className="h-4 w-4" />
-              Customize
-            </button>
+        </div>
+      </div>
+
+      {apiError && (
+        <div className="rounded-[2rem] border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-900 shadow-sm dark:border-rose-800 dark:bg-rose-950/90 dark:text-rose-100">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p>{apiError}</p>
             <button
               type="button"
-              onClick={toggleTheme}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
+              onClick={loadDashboard}
+              className="inline-flex items-center justify-center rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
             >
-              {theme === "dark" ? <Moon className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
-              {themeOptionLabel(theme)} Mode
+              Retry
             </button>
-            <div className="inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-500/20">
-              <Trophy className="h-4 w-4" />
-              Top Learner
-            </div>
           </div>
         </div>
-
-        {showCustomize && (
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {Object.keys(visibleSections).map((sectionKey) => (
-              <button
-                key={sectionKey}
-                type="button"
-                onClick={() => setVisibleSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }))}
-                className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                  visibleSections[sectionKey]
-                    ? "border-brand-300 bg-brand-50 text-brand-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold capitalize">{sectionKey.replace(/([A-Z])/g, " $1")}</span>
-                  <span className="rounded-full bg-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                    {visibleSections[sectionKey] ? "Visible" : "Hidden"}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[1.7fr,1fr]">
         <div className="space-y-6">
@@ -431,7 +376,7 @@ export default function StudentDashboard() {
                   key={card.label}
                   type="button"
                   onClick={() => navigate(card.action)}
-                  className="group overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:from-slate-900 dark:to-slate-950"
+                  className="group overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-2xl dark:border-slate-800 dark:from-slate-900 dark:to-slate-950"
                 >
                   <div className={`inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-gradient-to-br ${card.bg} text-white shadow-lg transition group-hover:scale-105`}>
                     <Icon className="h-5 w-5" />
@@ -447,44 +392,6 @@ export default function StudentDashboard() {
             })}
           </div>
 
-          {visibleSections.weeklyAttendance && (
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="mb-5 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Weekly Attendance</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">At a glance</h2>
-                </div>
-                <span className="rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">Last 7 days</span>
-              </div>
-              <div className="space-y-4">
-                <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart data={weeklyAttendance} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="attendanceArea" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="#4f46e5" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: "#64748b" }} axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b" }} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ borderRadius: 18, border: "1px solid #cbd5e1", backgroundColor: theme === "dark" ? "#0f172a" : "#ffffff" }} />
-                    <Area type="monotone" dataKey="count" stroke="#4f46e5" fill="url(#attendanceArea)" strokeWidth={3} />
-                  </AreaChart>
-                </ResponsiveContainer>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {weeklyAttendance.map((item) => (
-                    <div key={item.label} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-center dark:border-slate-800 dark:bg-slate-950">
-                      <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">{item.label}</p>
-                      <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">{item.status}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {visibleSections.marksPerformance && (
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
@@ -525,9 +432,7 @@ export default function StudentDashboard() {
                 </div>
               </div>
             </div>
-          )}
 
-          {visibleSections.todayTimetable && (
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
@@ -569,9 +474,7 @@ export default function StudentDashboard() {
                 </div>
               )}
             </div>
-          )}
 
-          {visibleSections.recentNotifications && (
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
@@ -600,7 +503,6 @@ export default function StudentDashboard() {
                 </ul>
               )}
             </div>
-          )}
         </div>
 
         <div className="space-y-6">
@@ -656,7 +558,6 @@ export default function StudentDashboard() {
             )}
           </div>
 
-          {visibleSections.studyMaterials && (
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
@@ -693,54 +594,7 @@ export default function StudentDashboard() {
                 </ul>
               )}
             </div>
-          )}
 
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Report Card</p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">Latest result</h2>
-                </div>
-                <Trophy className="h-6 w-6 text-brand-600" />
-              </div>
-              {latestReport ? (
-                <div className="space-y-4">
-                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                    <p className="font-semibold text-slate-900 dark:text-slate-100">{latestReport.examTypeName || "Report Card"}</p>
-                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{latestReport.academicYear || "Current year"}</p>
-                  </div>
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <button onClick={() => window.open(latestReport.pdfUrl, "_blank")} className="flex-1 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
-                      View Report Card
-                    </button>
-                    <button onClick={() => window.open(latestReport.pdfUrl, "_blank")} className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900">
-                      Download PDF
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <EmptyState title="No report cards yet" />
-              )}
-            </div>
-
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Motivation</p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">Daily inspiration</h2>
-                </div>
-                <Sparkles className="h-6 w-6 text-amber-500" />
-              </div>
-              <div className="rounded-[1.5rem] bg-gradient-to-br from-slate-900 to-brand-600 p-6 text-white shadow-2xl">
-                <p className="text-sm uppercase tracking-[0.24em] text-slate-300">Keep going</p>
-                <p className="mt-4 text-2xl font-semibold">Attendance above 90% — you're on track for a great term.</p>
-                <p className="mt-4 text-sm text-slate-200">Complete your pending assignments and review today’s classes to stay ahead.</p>
-              </div>
-            </div>
-          </div>
-
-          {visibleSections.academicProgress && (
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
@@ -763,35 +617,10 @@ export default function StudentDashboard() {
                 ))}
               </div>
             </div>
-          )}
 
-          {visibleSections.achievements && (
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="mb-5 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Achievements</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">Badges earned</h2>
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {[
-                  { label: "Perfect Attendance", icon: Star, tone: "bg-amber-50 text-amber-700" },
-                  { label: "Top Performer", icon: Trophy, tone: "bg-emerald-50 text-emerald-700" },
-                  { label: "Assignment Master", icon: ClipboardCheck, tone: "bg-sky-50 text-sky-700" },
-                  { label: "Science Champion", icon: BookOpen, tone: "bg-fuchsia-50 text-fuchsia-700" },
-                ].map((badge) => (
-                  <div key={badge.label} className="rounded-3xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
-                    <div className={`mb-4 inline-flex rounded-3xl px-3 py-2 text-sm font-semibold ${badge.tone}`}>
-                      <badge.icon className="h-4 w-4" />
-                    </div>
-                    <p className="font-semibold text-slate-900 dark:text-slate-100">{badge.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          </div>
+
         </div>
-      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -848,35 +677,6 @@ export default function StudentDashboard() {
           )}
         </div>
 
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">Homework</p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">Pending assignments</h2>
-            </div>
-            <span className="rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">{assignmentCount} items</span>
-          </div>
-          {assignments.length === 0 ? (
-            <EmptyState title="No pending assignments" />
-          ) : (
-            <ul className="space-y-3">
-              {assignments.slice(0, 4).map((item) => {
-                const dueDays = item.uploadedAt ? differenceInDays(addDays(parseISO(item.uploadedAt), 7), new Date()) : 0;
-                return (
-                  <li key={item.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-900 dark:text-slate-100">{item.title}</p>
-                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Due {dueDays > 0 ? `${dueDays} days` : "Soon"}</p>
-                      </div>
-                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">{item.type || "Assignment"}</span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
       </div>
     </div>
   );
