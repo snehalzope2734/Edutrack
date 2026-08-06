@@ -7,5 +7,129 @@ html, body, #root {
 }
 
 body {
-  @apply bg-slate-50 text-slate-900;
+  @apply bg-slate-50 text-slate-900 antialiased;
+  color-scheme: light;
+}
+
+:root {
+  --surface: #ffffff;
+  --surface-soft: #f8fafc;
+  --surface-strong: #f8fafc;
+  --border: #e2e8f0;
+  --border-heavy: #cbd5e1;
+  --text: #0f172a;
+  --muted: #64748b;
+  --primary: #2563eb;
+  --primary-soft: #eff6ff;
+  --shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+}
+
+html.dark {
+  --surface: #0f172a;
+  --surface-soft: #111827;
+  --surface-strong: #111827;
+  --border: #1f2937;
+  --border-heavy: #374151;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --primary: #93c5fd;
+  --primary-soft: rgba(59, 130, 246, 0.16);
+  --shadow: 0 24px 60px rgba(15, 23, 42, 0.45);
+}
+
+html.dark body {
+  @apply bg-slate-950 text-slate-100;
+  color-scheme: dark;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 25%),
+    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.08), transparent 20%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+html.dark body::before {
+  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 22%),
+    radial-gradient(circle at bottom right, rgba(15, 23, 42, 0.65), transparent 24%);
+}
+
+:root {
+  scroll-behavior: smooth;
+}
+
+* {
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+html.dark *::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.8);
+}
+
+button,
+input,
+textarea,
+select {
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+@layer components {
+  .surface-panel {
+    background-color: var(--surface);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .surface-soft-panel {
+    background-color: var(--surface-soft);
+  }
+
+  .pill-input {
+    background-color: var(--surface-soft);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .pill-input:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+  }
+
+  .dropdown-panel {
+    animation: fade-slide-in 220ms ease-out both;
+  }
+
+  .dropdown-item {
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  .dropdown-item:hover {
+    background-color: rgba(59, 130, 246, 0.06);
+  }
+
+  @keyframes fade-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
 }

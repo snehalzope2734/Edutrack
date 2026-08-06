@@ -49,6 +49,11 @@ public class StudentSelfController {
                         : null
         );
 
+        m.put(
+                "academicYear",
+                classEntity != null ? classEntity.getAcademicYear() : null
+        );
+
         return ResponseEntity.ok(m);
     }
 }
