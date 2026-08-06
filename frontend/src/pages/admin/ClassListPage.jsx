@@ -86,7 +86,19 @@ export default function ClassListPage() {
 
   const updateSubjectTeacher = async (classId, subjectId, teacherId) => {
     try {
-      await adminApi.updateSubject(subjectId, { teacherId: teacherId || null });
+      const subject = (subjects[classId] ?? []).find((item) => item.id === subjectId);
+      if (!subject) {
+        toast.error("Subject not found");
+        return;
+      }
+
+      await adminApi.updateSubject(subjectId, {
+        name: subject.name,
+        code: subject.code,
+        classId: subject.classId,
+        teacherId: teacherId || null,
+      });
+
       toast.success("Teacher assignment updated");
       const { data } = await adminApi.listSubjects({ classId });
       setSubjects((prev) => ({ ...prev, [classId]: data }));
