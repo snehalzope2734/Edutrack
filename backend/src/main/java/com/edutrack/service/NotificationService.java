@@ -19,9 +19,11 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
 
-    public Page<Notification> listForUser(String userId, String classId, Pageable pageable) {
+    public Page<Notification> listForUser(String userId, String classId, boolean isTeacher, Pageable pageable) {
         String classTag = classId != null ? "CLASS:" + classId : "__none__";
-        return notificationRepository.findForUser(userId, classTag, pageable);
+        return isTeacher
+                ? notificationRepository.findForTeacher(userId, classTag, pageable)
+                : notificationRepository.findForUser(userId, classTag, pageable);
     }
 
     public Notification create(NotificationRequest req, String senderId, String senderRole) {

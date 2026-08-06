@@ -10,4 +10,7 @@ public interface NotificationRepository extends MongoRepository<Notification, St
 
     @Query("{ '$or': [ { 'recipients': 'ALL' }, { 'recipients': ?0 }, { 'recipients': ?1 } ] }")
     Page<Notification> findForUser(String userId, String classTag, Pageable pageable);
+
+    @Query("{ '$or': [ { 'recipients': 'ALL' }, { 'recipients': ?0 }, { 'recipients': ?1 }, { 'recipients': 'ALL_TEACHERS' } ] }")
+    Page<Notification> findForTeacher(String userId, String classTag, Pageable pageable);
 }

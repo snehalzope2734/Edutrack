@@ -28,7 +28,7 @@ public class NotificationController {
             @RequestParam(required = false) String classId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(notificationService.listForUser(CurrentUser.id().toString(), classId, PageRequest.of(page, size)));
+        return ResponseEntity.ok(notificationService.listForUser(CurrentUser.id().toString(), classId, CurrentUser.isTeacher(), PageRequest.of(page, size)));
     }
 
     @PostMapping
