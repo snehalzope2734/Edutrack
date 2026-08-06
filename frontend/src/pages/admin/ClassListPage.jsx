@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import toast from "react-hot-toast";
 import PageHeader from "../../components/common/PageHeader";
@@ -16,6 +16,8 @@ export default function ClassListPage() {
   const [form, setForm] = useState({ className: "", section: "", academicYear: "2026-2027", classTeacherId: "" });
   const [subjectForm, setSubjectForm] = useState({ name: "", code: "", teacherId: "" });
   const [saving, setSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 12;
 
   // STEP 1: Edit states
   const [editingClass, setEditingClass] = useState(null);
@@ -36,6 +38,7 @@ export default function ClassListPage() {
       ]);
       setClasses(classesRes.data ?? []);
       setTeachers(teachersRes.data.content ?? []);
+      setCurrentPage(1);
     } catch {
       toast.error("Could not load classes");
     } finally {
@@ -44,6 +47,56 @@ export default function ClassListPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const sortedClasses = useMemo(() => {
+    return [...classes].sort((a, b) => {
+      const normalize = (value) => String(value ?? "").trim();
+      const labelA = `${normalize(a.className)}${a.section ? ` ${normalize(a.section)}` : ""}`.trim();
+      const labelB = `${normalize(b.className)}${b.section ? ` ${normalize(b.section)}` : ""}`.trim();
+
+      const parseLabel = (label) => {
+        const numericPrefix = label.match(/^\s*(\d+)\s*(.*)$/);
+        if (numericPrefix) {
+          return {
+            number: Number(numericPrefix[1]),
+            remainder: numericPrefix[2].trim().toLowerCase(),
+          };
+        }
+
+        return {
+          number: null,
+          remainder: label.toLowerCase(),
+        };
+      };
+
+      const aParts = parseLabel(labelA);
+      const bParts = parseLabel(labelB);
+
+      if (aParts.number !== null && bParts.number !== null) {
+        if (aParts.number !== bParts.number) {
+          return aParts.number - bParts.number;
+        }
+        return aParts.remainder.localeCompare(bParts.remainder);
+      }
+
+      if (aParts.number !== null) return -1;
+      if (bParts.number !== null) return 1;
+
+      return aParts.remainder.localeCompare(bParts.remainder);
+    });
+  }, [classes]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedClasses.length / pageSize));
+  const paginatedClasses = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return sortedClasses.slice(startIndex, startIndex + pageSize);
+  }, [sortedClasses, currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const openClassDetails = async (classId) => {
     setSelectedClassId(classId);
@@ -54,6 +107,17 @@ export default function ClassListPage() {
   };
 
   const selectedClass = classes.find((c) => c.id === selectedClassId);
+
+  const openEditClass = (klass) => {
+    setSelectedClassId(null);
+    setEditingClass(klass);
+    setEditForm({
+      className: klass.className,
+      section: klass.section,
+      academicYear: klass.academicYear,
+      classTeacherId: klass.classTeacherId || "",
+    });
+  };
 
   const createClass = async (e) => {
     e.preventDefault();
@@ -155,46 +219,101 @@ export default function ClassListPage() {
         }
       />
 
-      {classes.length === 0 ? (
+      {sortedClasses.length === 0 ? (
         <EmptyState title="No classes yet" description="Create your first class and section to get started." />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {classes.map((c) => {
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => openClassDetails(c.id)}
-                className="group rounded-3xl border border-slate-200 bg-white/95 p-6 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-2xl dark:border-slate-800 dark:bg-slate-950/95"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Class</p>
-                    <h3 className="mt-2 text-2xl font-semibold text-slate-900">{c.className}{c.section ? ` ${c.section}` : ""}</h3>
+        <>
+          <div className="mb-4 flex items-center justify-between text-sm text-slate-500">
+            <p>Showing {paginatedClasses.length} of {sortedClasses.length} classes</p>
+            <p>Page {currentPage} of {totalPages}</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {paginatedClasses.map((c) => {
+              return (
+                <div key={c.id} className="group rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-2xl dark:border-slate-800 dark:bg-slate-950/95">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openClassDetails(c.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openClassDetails(c.id);
+                      }
+                    }}
+                    className="w-full cursor-pointer text-left"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Class</p>
+                        <h3 className="mt-2 text-2xl font-semibold text-slate-900">{c.className}{c.section ? ` ${c.section}` : ""}</h3>
+                      </div>
+                      <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                        {c.academicYear}
+                      </span>
+                    </div>
+                    <div className="mt-5 space-y-3 text-sm text-slate-600">
+                      <p>
+                        <span className="font-medium text-slate-900">Students:</span> {c.studentCount}
+                      </p>
+                      <p>
+                        <span className="font-medium text-slate-900">Class Teacher:</span>{" "}
+                        <span className="text-slate-700">{c.classTeacherName || "Not assigned"}</span>
+                      </p>
+                      <p className="rounded-2xl bg-slate-50 px-3 py-2 text-slate-500">
+                        Click to view subjects and teacher assignments
+                      </p>
+                    </div>
                   </div>
-                  <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                    {c.academicYear}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditClass(c);
+                    }}
+                    className="mt-4 inline-flex items-center justify-center rounded-full border border-brand-500 px-3 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
+                  >
+                    Assign class teacher
+                  </button>
                 </div>
-                <div className="mt-5 space-y-3 text-sm text-slate-600">
-                  <p>
-                    <span className="font-medium text-slate-900">Students:</span> {c.studentCount}
-                  </p>
-                  <p>
-                    <span className="font-medium text-slate-900">Class Teacher:</span>{" "}
-                    <span className="text-slate-700">{c.classTeacherName || "Not assigned"}</span>
-                  </p>
-                  <p className="rounded-2xl bg-slate-50 px-3 py-2 text-slate-500">
-                    Click to view subjects and teacher assignments
-                  </p>
-                </div>
-                <div className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-brand-600 opacity-80 group-hover:opacity-100">
-                  View details
-                </div>
+              );
+            })}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+                className="rounded-full border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
               </button>
-            );
-          })}
-        </div>
+
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => setCurrentPage(page)}
+                  className={`rounded-full px-3 py-2 text-sm font-semibold transition ${currentPage === page ? "bg-brand-600 text-white" : "border border-slate-300 text-slate-700 hover:bg-slate-100"}`}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage === totalPages}
+                className="rounded-full border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {selectedClass && (
@@ -218,9 +337,16 @@ export default function ClassListPage() {
                 <p className="mt-2 text-xl font-semibold text-slate-900">{selectedClass.className}{selectedClass.section ? ` ${selectedClass.section}` : ""}</p>
                 <p className="mt-3 text-sm text-slate-600">Academic Year: {selectedClass.academicYear}</p>
                 <p className="mt-1 text-sm text-slate-600">Students: {selectedClass.studentCount}</p>
-                <p className="mt-3 inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
                   {selectedClass.classTeacherName || "No class teacher assigned"}
-                </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openEditClass(selectedClass)}
+                  className="mt-4 inline-flex items-center justify-center rounded-full border border-brand-500 bg-white px-3 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
+                >
+                  {selectedClass.classTeacherName ? "Change class teacher" : "Assign class teacher"}
+                </button>
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-white p-5">
