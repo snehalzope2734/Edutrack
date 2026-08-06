@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import toast from "react-hot-toast";
 import PageHeader from "../../components/common/PageHeader";
-import DataTable from "../../components/common/DataTable";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import { adminApi } from "../../api/adminApi";
 
@@ -159,37 +158,65 @@ export default function SubjectListPage() {
 
       {loading ? (
         <LoadingSpinner />
+      ) : filteredSubjects.length === 0 ? (
+        <EmptyState title="No subjects found" description="Add a subject to get started." />
       ) : (
-        <DataTable
-          rows={filteredSubjects}
-          emptyMessage="No subjects found"
-          columns={[
-            { key: "name", header: "Subject" },
-            { key: "code", header: "Code" },
-            { key: "className", header: "Class" },
-            { key: "teacherName", header: "Teacher" },
-            {
-                key: "actions",
-                header: "Actions",
-                render: (row) => (
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => handleEdit(row)}
-                            className="rounded bg-blue-500 px-2 py-1 text-white hover:bg-blue-600"
-                        >
-                            Edit
-                        </button>
-                        <button
-                            onClick={() => handleDelete(row.id)}
-                            className="rounded bg-red-500 px-2 py-1 text-white hover:bg-red-600"
-                        >
-                            Delete
-                        </button>
+        <div className="space-y-6">
+          {Object.entries(
+            filteredSubjects.reduce((acc, subject) => {
+              const classKey = subject.className || "Unassigned class";
+              if (!acc[classKey]) acc[classKey] = [];
+              acc[classKey].push(subject);
+              return acc;
+            }, {})
+          ).map(([className, subjectsForClass]) => (
+            <div key={className} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500">Class</p>
+                  <h3 className="mt-2 text-xl font-semibold text-slate-900 dark:text-slate-100">{className}</h3>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {subjectsForClass.length} subjects
+                </span>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {subjectsForClass.map((subject) => (
+                  <div key={subject.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+                    <div className="mb-3">
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Subject</p>
+                      <h4 className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{subject.name}</h4>
                     </div>
-                )
-            }
-          ]}
-        />
+                    <div className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                      <div>
+                        <p className="text-slate-500 dark:text-slate-400">Code</p>
+                        <p className="font-medium text-slate-900 dark:text-white">{subject.code}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 dark:text-slate-400">Teacher</p>
+                        <p className="font-medium text-slate-900 dark:text-white">{subject.teacherName || "Unassigned"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleEdit(subject)}
+                        className="rounded-full bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(subject.id)}
+                        className="rounded-full bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {showForm && (
