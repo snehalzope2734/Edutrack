@@ -38,24 +38,32 @@ export default function TeacherListPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [pageSize] = useState(100);
+  const [pageSize] = useState(10);
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [deptTeachers, setDeptTeachers] = useState([]);
   const [deptPage, setDeptPage] = useState(0);
   const [deptTotalPages, setDeptTotalPages] = useState(0);
   const [deptTotalElements, setDeptTotalElements] = useState(0);
+  const [allTeachers, setAllTeachers] = useState(null);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [deletedTeachers, setDeletedTeachers] = useState([]);
+  const [deletedPage, setDeletedPage] = useState(0);
+  const [deletedTotalPages, setDeletedTotalPages] = useState(0);
+  const [deletedTotalElements, setDeletedTotalElements] = useState(0);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [customDropdowns, setCustomDropdowns] = useState({});
 
-  const load = async (searchTerm = search, currentPage = page) => {
+  const load = async (searchTerm = search, currentPage = page, department = null) => {
     setLoading(true);
     try {
       const { data } = await adminApi.listTeachers({
         page: currentPage,
         size: pageSize,
         search: searchTerm,
+        department,
+        active: true,
       });
-      setTeachers(data.content ?? []);
+      setTeachers(sortByEmployeeCode(data.content ?? []));
       setPage(currentPage);
       // Clear any department selection when reloading the main list
       setSelectedDepartment(null);
@@ -63,6 +71,17 @@ export default function TeacherListPage() {
       toast.error("Could not load teachers");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch all teachers (large size) for client-side grouping/filtering
+  const fetchAllTeachers = async (searchTerm = search) => {
+    try {
+      const { data } = await adminApi.listTeachers({ page: 0, size: 10000, search: searchTerm, active: true });
+      setAllTeachers(sortByEmployeeCode(data.content ?? []));
+    } catch (err) {
+      // ignore silently, groups will fallback to paginated list
+      setAllTeachers(null);
     }
   };
 
@@ -74,11 +93,13 @@ export default function TeacherListPage() {
         size: pageSize,
         search,
         department,
+        active: true,
       });
-      setDeptTeachers(data.content ?? []);
+      const sorted = sortByEmployeeCode(data.content ?? []);
+      setDeptTeachers(sorted);
       setDeptPage(pageIndex);
       setDeptTotalPages(data.totalPages ?? 0);
-      setDeptTotalElements(data.totalElements ?? (data.content ? data.content.length : 0));
+      setDeptTotalElements(data.totalElements ?? (sorted.length));
       setSelectedDepartment(department);
     } catch (err) {
       toast.error("Could not load department teachers");
@@ -87,13 +108,84 @@ export default function TeacherListPage() {
     }
   };
 
+  const sortByEmployeeCode = (list) => [...list].sort((a, b) => {
+    const aCode = a.employeeCode || "";
+    const bCode = b.employeeCode || "";
+    return aCode.localeCompare(bCode, undefined, { numeric: true, sensitivity: "base" });
+  });
+
+  const refreshTeacherInLists = (updatedTeacher) => {
+    setTeachers((current) => current ? sortByEmployeeCode(current.map((teacher) => (teacher.id === updatedTeacher.id ? updatedTeacher : teacher))) : current);
+
+    setAllTeachers((current) => current ? sortByEmployeeCode(current.map((teacher) => (teacher.id === updatedTeacher.id ? updatedTeacher : teacher))) : current);
+
+    setDeptTeachers((current) => {
+      if (!selectedDepartment || !current) return current;
+      let updatedList = current.map((teacher) => (teacher.id === updatedTeacher.id ? updatedTeacher : teacher));
+      const matchesDepartment = (updatedTeacher.department || "Unassigned") === selectedDepartment;
+
+      if (selectedDepartment === "All") {
+        return sortByEmployeeCode(updatedList);
+      }
+
+      if (matchesDepartment) {
+        if (!updatedList.some((teacher) => teacher.id === updatedTeacher.id)) {
+          updatedList = [...updatedList, updatedTeacher];
+        }
+        return sortByEmployeeCode(updatedList);
+      }
+
+      return updatedList.filter((teacher) => teacher.id !== updatedTeacher.id);
+    });
+  };
+
+  const fetchDeletedTeachers = async (searchTerm = search, pageIndex = deletedPage) => {
+    setLoading(true);
+    try {
+      const { data } = await adminApi.listTeachers({
+        page: pageIndex,
+        size: pageSize,
+        search: searchTerm,
+        active: false,
+      });
+      const sorted = sortByEmployeeCode(data.content ?? []);
+      setDeletedTeachers(sorted);
+      setDeletedPage(pageIndex);
+      setDeletedTotalPages(data.totalPages ?? 0);
+      setDeletedTotalElements(data.totalElements ?? sorted.length);
+    } catch {
+      toast.error("Could not load deleted teachers");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reloadCurrentSelection = () => {
+    if (!selectedDepartment) {
+      load(search, page);
+      return;
+    }
+
+    const source = allTeachers ?? teachers;
+    const list = selectedDepartment === "All"
+      ? source
+      : source.filter((teacher) => (teacher.department || "Unassigned") === selectedDepartment);
+
+    setDeptTeachers(list);
+    setDeptPage(0);
+    setDeptTotalPages(Math.max(1, Math.ceil(list.length / pageSize)));
+    setDeptTotalElements(list.length);
+  };
+
   useEffect(() => {
     load(search, 0);
+    fetchAllTeachers(search);
   }, []);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       load(search, 0);
+      fetchAllTeachers(search);
     }, 500);
     return () => clearTimeout(delayDebounceFn);
   }, [search]);
@@ -133,8 +225,10 @@ export default function TeacherListPage() {
           qualification: payload.qualification,
           isActive: payload.isActive,
         };
-        await adminApi.updateTeacher(form.id, updatePayload);
+        const { data } = await adminApi.updateTeacher(form.id, updatePayload);
         toast.success("Teacher updated successfully");
+        refreshTeacherInLists(data);
+        reloadCurrentSelection();
       } else {
         const createPayload = {
           name: payload.name,
@@ -145,13 +239,19 @@ export default function TeacherListPage() {
           designation: payload.designation,
           qualification: payload.qualification,
         };
-        await adminApi.createTeacher(createPayload);
+        const { data } = await adminApi.createTeacher(createPayload);
         toast.success("Teacher created successfully");
+        setTeachers((current) => sortByEmployeeCode([data, ...(current || [])]));
+        setAllTeachers((current) => sortByEmployeeCode(current ? [data, ...current] : [data]));
+        if (selectedDepartment === "All" || (selectedDepartment && (data.department || "Unassigned") === selectedDepartment)) {
+          setDeptTeachers((current) => sortByEmployeeCode([data, ...(current || [])]));
+          setDeptTotalElements((current) => current + 1);
+          setDeptTotalPages((current) => Math.max(1, Math.ceil((current + 1) / pageSize)));
+        }
       }
       setShowForm(false);
       setForm(emptyForm);
       setCustomDropdowns({});
-      load(search, 0);
     } catch (err) {
       toast.error(err.response?.data?.message || "Operation failed");
     } finally {
@@ -159,14 +259,41 @@ export default function TeacherListPage() {
     }
   };
 
+  const removeTeacherFromState = (id) => {
+    setTeachers((current) => current.filter((teacher) => teacher.id !== id));
+    setAllTeachers((current) => current ? current.filter((teacher) => teacher.id !== id) : current);
+    setDeptTeachers((current) => {
+      const next = current ? current.filter((teacher) => teacher.id !== id) : current;
+      setDeptTotalElements(next.length);
+      setDeptTotalPages(Math.max(1, Math.ceil(next.length / pageSize)));
+      if (deptPage > 0 && deptPage >= Math.ceil(next.length / pageSize)) {
+        setDeptPage(Math.max(0, Math.ceil(next.length / pageSize) - 1));
+      }
+      return next;
+    });
+  };
+
   const handleDelete = async (id) => {
       if (!window.confirm("Delete this teacher?")) return;
       try {
           await adminApi.deleteTeacher(id);
           toast.success("Teacher deleted successfully");
-          load();
+          removeTeacherFromState(id);
       } catch {
           toast.error("Delete failed");
+      }
+  };
+
+  const handlePermanentDelete = async (id) => {
+      if (!window.confirm("Permanently delete this teacher from the database?")) return;
+      try {
+          await adminApi.hardDeleteTeacher(id);
+          toast.success("Teacher permanently deleted");
+          setDeletedTeachers((current) => current.filter((teacher) => teacher.id !== id));
+          setDeletedTotalElements((current) => Math.max(0, current - 1));
+          setDeletedTotalPages((current) => Math.max(1, Math.ceil(Math.max(0, current - 1) / pageSize)));
+      } catch {
+          toast.error("Permanent delete failed");
       }
   };
 
@@ -191,8 +318,9 @@ export default function TeacherListPage() {
     }
   };
 
-  const totalTeachers = teachers.length;
-  const activeTeachers = teachers.filter((teacher) => teacher.isActive).length;
+  const displayedTeacherList = allTeachers ?? teachers;
+  const totalTeachers = displayedTeacherList.length;
+  const activeTeachers = displayedTeacherList.filter((teacher) => teacher.isActive).length;
   const inactiveTeachers = totalTeachers - activeTeachers;
 
   const fields = useMemo(() => [
@@ -220,15 +348,34 @@ export default function TeacherListPage() {
   return (
     <div>
       <PageHeader
-        title="Teachers"
-        subtitle={`Manage teaching staff · ${totalTeachers} teacher${totalTeachers === 1 ? "" : "s"}`}
+        title={showDeleted ? "Deleted teachers" : "Teachers"}
+        subtitle={showDeleted ? `${deletedTotalElements} deleted teacher${deletedTotalElements === 1 ? "" : "s"}` : `Manage teaching staff · ${totalTeachers} teacher${totalTeachers === 1 ? "" : "s"}`}
         action={
-          <button 
-            onClick={() => { setForm(emptyForm); setCustomDropdowns({}); setPasswordVisible(false); setShowForm(true); }} 
-            className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-          >
-            <Plus className="h-4 w-4" /> Add Teacher
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {!showDeleted ? (
+              <>
+                <button
+                  onClick={() => { setForm(emptyForm); setCustomDropdowns({}); setPasswordVisible(false); setShowForm(true); }}
+                  className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                >
+                  <Plus className="h-4 w-4" /> Add Teacher
+                </button>
+                <button
+                  onClick={() => { setShowDeleted(true); setSelectedDepartment(null); fetchDeletedTeachers(); }}
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Deleted Teachers
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => { setShowDeleted(false); setDeletedPage(0); setDeletedTeachers([]); load(search, 0); fetchAllTeachers(search); }}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Back to Active
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -261,14 +408,96 @@ export default function TeacherListPage() {
       ) : (
         <>
           {/* When no department selected show department cards */}
-          {!selectedDepartment ? (
+          {showDeleted ? (
+            <>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Deleted teachers</h3>
+                  <p className="text-sm text-slate-500">This list shows teachers who were soft-deleted and can be removed permanently.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={deletedPage <= 0}
+                    onClick={() => fetchDeletedTeachers(search, Math.max(0, deletedPage - 1))}
+                    className="rounded-lg border px-3 py-2 text-sm"
+                  >
+                    Prev
+                  </button>
+                  <span className="text-sm text-slate-600">Page {deletedPage + 1} / {Math.max(1, deletedTotalPages)}</span>
+                  <button
+                    disabled={deletedPage >= (deletedTotalPages - 1)}
+                    onClick={() => fetchDeletedTeachers(search, deletedPage + 1)}
+                    className="rounded-lg border px-3 py-2 text-sm"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              <DataTable
+                rows={(deletedTeachers || []).slice(deletedPage * pageSize, (deletedPage + 1) * pageSize)}
+                emptyMessage="No deleted teachers found"
+                columns={[
+                  { key: "name", header: "Name" },
+                  { key: "email", header: "Email" },
+                  { key: "phone", header: "Phone" },
+                  { key: "employeeCode", header: "Employee Code" },
+                  { key: "department", header: "Department" },
+                  { key: "designation", header: "Designation" },
+                  {
+                    key: "actions",
+                    header: "Actions",
+                    render: (row) => (
+                      <button
+                        onClick={() => handlePermanentDelete(row.id)}
+                        className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700"
+                      >
+                        Delete permanently
+                      </button>
+                    ),
+                  },
+                ]}
+              />
+            </>
+          ) : !selectedDepartment ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              {Array.from(new Map(teachers.map(t => [t.department || "Unassigned", null]))).map(([dept]) => {
-                const count = teachers.filter((t) => (t.department || "Unassigned") === dept).length;
+              {/* All card */}
+              <button
+                key="All"
+                onClick={() => {
+                  const source = sortByEmployeeCode(allTeachers ?? teachers);
+                  setSelectedDepartment("All");
+                  setDeptTeachers(source);
+                  setDeptPage(0);
+                  setDeptTotalPages(Math.max(1, Math.ceil(source.length / pageSize)));
+                  setDeptTotalElements(source.length);
+                }}
+                className="group flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm hover:shadow-md"
+              >
+                <div>
+                  <p className="text-sm font-medium text-slate-700">All</p>
+                  <p className="mt-1 text-2xl font-semibold text-slate-900">{allTeachers ? allTeachers.length : totalTeachers}</p>
+                </div>
+                <div className="ml-4 flex items-center text-sm text-slate-400">View</div>
+              </button>
+              {Array.from(new Map((allTeachers ?? teachers).map(t => [t.department || "Unassigned", null]))).map(([dept]) => {
+                const source = allTeachers ?? teachers;
+                const count = source.filter((t) => (t.department || "Unassigned") === dept).length;
                 return (
                   <button
                     key={dept}
-                    onClick={() => loadDepartment(dept, 0)}
+                    onClick={() => {
+                      if (allTeachers) {
+                        const filtered = allTeachers.filter((t) => (t.department || "Unassigned") === dept);
+                        setSelectedDepartment(dept);
+                        setDeptTeachers(filtered);
+                        setDeptPage(0);
+                        setDeptTotalPages(Math.max(1, Math.ceil(filtered.length / pageSize)));
+                        setDeptTotalElements(filtered.length);
+                      } else {
+                        loadDepartment(dept, 0);
+                      }
+                    }}
                     className="group flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm hover:shadow-md"
                   >
                     <div>
@@ -287,54 +516,58 @@ export default function TeacherListPage() {
                 <h3 className="text-lg font-semibold">{selectedDepartment} · {deptTotalElements} teacher{deptTotalElements === 1 ? "" : "s"}</h3>
               </div>
               <div className="flex items-center gap-2">
-                <button disabled={deptPage <= 0} onClick={() => loadDepartment(selectedDepartment, Math.max(0, deptPage - 1))} className="rounded-lg border px-3 py-2 text-sm">Prev</button>
+                <button disabled={deptPage <= 0} onClick={() => setDeptPage(Math.max(0, deptPage - 1))} className="rounded-lg border px-3 py-2 text-sm">Prev</button>
                 <span className="text-sm text-slate-600">Page {deptPage + 1} / {Math.max(1, deptTotalPages)}</span>
-                <button disabled={deptPage >= (deptTotalPages - 1)} onClick={() => loadDepartment(selectedDepartment, deptPage + 1)} className="rounded-lg border px-3 py-2 text-sm">Next</button>
+                <button disabled={deptPage >= (deptTotalPages - 1)} onClick={() => setDeptPage(deptPage + 1)} className="rounded-lg border px-3 py-2 text-sm">Next</button>
               </div>
             </div>
           )}
 
-          <DataTable
-            rows={selectedDepartment ? deptTeachers : teachers}
-          emptyMessage="No teachers found"
-          columns={[
-            { key: "name", header: "Name" },
-            { key: "email", header: "Email" },
-            { key: "phone", header: "Phone" },
-            { key: "employeeCode", header: "Employee Code" },
-            { key: "department", header: "Department" },
-            { key: "designation", header: "Designation" },
-            {
-              key: "isActive",
-              header: "Status",
-              render: (r) => (
-                <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${r.isActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
-                  {r.isActive ? "Active" : "Inactive"}
-                </span>
-              ),
-            },
-            {
-              key: "actions",
-              header: "Actions",
-              render: (row) => (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleEdit(row)}
-                    className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(row.id)}
-                    className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ),
-            },
-          ]}
-        />
+          {/* Only show DataTable when a department (or All) is selected */}
+          {selectedDepartment && (
+            <DataTable
+              rows={(deptTeachers || []).slice(deptPage * pageSize, (deptPage + 1) * pageSize)}
+              emptyMessage="No teachers found"
+              columns={[
+                { key: "name", header: "Name" },
+                { key: "email", header: "Email" },
+                { key: "phone", header: "Phone" },
+                { key: "employeeCode", header: "Employee Code" },
+                { key: "department", header: "Department" },
+                { key: "designation", header: "Designation" },
+                {
+                  key: "isActive",
+                  header: "Status",
+                  render: (r) => (
+                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${r.isActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                      {r.isActive ? "Active" : "Inactive"}
+                    </span>
+                  ),
+                },
+                {
+                  key: "actions",
+                  header: "Actions",
+                  render: (row) => (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleEdit(row)}
+                        className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(row.id)}
+                        className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </>
       )}
 
       {showForm && (

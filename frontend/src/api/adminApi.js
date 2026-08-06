@@ -11,6 +11,7 @@ export const adminApi = {
   getTeacher: (id) => api.get(`/admin/teachers/${id}`),
   updateTeacher: (id, data) => api.put(`/admin/teachers/${id}`, data),
   deleteTeacher: (id) => api.delete(`/admin/teachers/${id}`),
+  hardDeleteTeacher: (id) => api.delete(`/admin/teachers/${id}/hard`),
 
   // Students
   listStudents: (params) => api.get("/admin/students", { params }),
