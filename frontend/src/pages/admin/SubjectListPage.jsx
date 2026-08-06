@@ -169,7 +169,9 @@ export default function SubjectListPage() {
               acc[classKey].push(subject);
               return acc;
             }, {})
-          ).map(([className, subjectsForClass]) => (
+          )
+            .sort(([classA], [classB]) => classA.localeCompare(classB, undefined, { numeric: true, sensitivity: "base" }))
+            .map(([className, subjectsForClass]) => (
             <div key={className} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
