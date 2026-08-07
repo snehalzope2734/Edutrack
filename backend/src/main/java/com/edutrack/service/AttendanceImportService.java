@@ -5,14 +5,17 @@ import com.edutrack.exception.ResourceNotFoundException;
 import com.edutrack.exception.UnauthorizedException;
 import com.edutrack.model.document.AttendanceImport;
 import com.edutrack.model.entity.Attendance;
+import com.edutrack.model.entity.ClassEntity;
 import com.edutrack.model.entity.Student;
 import com.edutrack.model.entity.Subject;
 
 import com.edutrack.repository.mongodb.AttendanceImportRepository;
 import com.edutrack.repository.supabase.AttendanceRepository;
+import com.edutrack.repository.supabase.ClassRepository;
 import com.edutrack.repository.supabase.StudentRepository;
 import com.edutrack.repository.supabase.SubjectRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
@@ -48,6 +51,7 @@ import java.util.UUID;
  * corrections are made by re-uploading a corrected file, which is itself recorded
  * as a new import, giving a full audit trail of every change.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AttendanceImportService {
@@ -58,6 +62,7 @@ public class AttendanceImportService {
     private final AttendanceRepository attendanceRepository;
     private final StudentRepository studentRepository;
     private final SubjectRepository subjectRepository;
+    private final ClassRepository classRepository;
   
     private final TeacherRepository teacherRepository;
 
@@ -70,12 +75,20 @@ public class AttendanceImportService {
             throw new BadRequestException("File is too large (max 5MB)");
         }
         String filename = file.getOriginalFilename();
-        if (filename == null || !(filename.toLowerCase().endsWith(".xlsx") || filename.toLowerCase().endsWith(".xls"))) {
-            throw new BadRequestException("Only .xlsx or .xls files are supported");
+        if (filename == null || !filename.toLowerCase().endsWith(".xlsx")) {
+            throw new BadRequestException("Only .xlsx files are supported. Rename the file to '" + buildExpectedFileName(date) + "'.");
+        }
+
+        if (!filename.equals(buildExpectedFileName(date))) {
+            throw new BadRequestException("The file name must be exactly '" + buildExpectedFileName(date) + "'.");
         }
 
         Subject subject = subjectRepository.findById(subjectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
+
+        if (subject.getClassEntity() == null || !classId.equals(subject.getClassEntity().getId())) {
+            throw new BadRequestException("Selected subject does not belong to the selected class");
+        }
 
         List<Student> classStudents = studentRepository.findByClassEntityId(classId);
         Map<String, Student> byRollNumber = new HashMap<>();
@@ -90,23 +103,56 @@ public class AttendanceImportService {
         try (InputStream is = file.getInputStream(); Workbook workbook = WorkbookFactory.create(is)) {
             Sheet sheet = workbook.getSheetAt(0);
             int lastRow = sheet.getLastRowNum();
+            Row header = sheet.getRow(0);
 
-            // Row 0 is assumed to be the header ("Roll Number", "Status"); data starts at row 1.
+            if (header == null || header.getLastCellNum() < 3) {
+                throw new BadRequestException("Invalid workbook header. The first row must contain exactly: Roll Number, Student Name, Status.");
+            }
+
+            Map<String, Integer> headerIndex = new HashMap<>();
+            for (int c = 0; c < header.getLastCellNum(); c++) {
+                String raw = normalizeHeader(readCellAsString(header.getCell(c)));
+                if (!raw.isBlank()) {
+                    headerIndex.put(raw, c);
+                }
+            }
+
+            if (!headerIndex.keySet().equals(Set.of("roll number", "student name", "status"))
+                    || headerIndex.get("roll number") != 0
+                    || headerIndex.get("student name") != 1
+                    || headerIndex.get("status") != 2) {
+                throw new BadRequestException("Invalid workbook header. The first row must contain exactly: Roll Number, Student Name, Status in that order.");
+            }
+
+            log.debug("Detected Headers: Roll Number -> Column {}, Student Name -> Column {}, Status -> Column {}",
+                    headerIndex.get("roll number"), headerIndex.get("student name"), headerIndex.get("status"));
+
+            int rollColumn = headerIndex.get("roll number");
+            int studentColumn = headerIndex.get("student name");
+            int statusColumn = headerIndex.get("status");
+
+            // Row 1 and below are attendance entries.
             for (int r = 1; r <= lastRow; r++) {
                 Row row = sheet.getRow(r);
                 if (row == null) continue;
 
-                String rollRaw = readCellAsString(row.getCell(0));
-                String statusRaw = readCellAsString(row.getCell(1));
+                String rollRaw = readCellAsString(row.getCell(rollColumn));
+                String studentRaw = readCellAsString(row.getCell(studentColumn));
+                String statusRaw = readCellAsString(row.getCell(statusColumn));
 
-                if ((rollRaw == null || rollRaw.isBlank()) && (statusRaw == null || statusRaw.isBlank())) {
+                log.debug("Row {}: Roll = {}, Student = {}, Status = {}", r + 1, rollRaw, studentRaw, statusRaw);
+
+                if ((rollRaw == null || rollRaw.isBlank())
+                        && (studentRaw == null || studentRaw.isBlank())
+                        && (statusRaw == null || statusRaw.isBlank())) {
                     continue; // skip fully blank trailing rows
                 }
 
                 AttendanceImport.RowResult.RowResultBuilder rb = AttendanceImport.RowResult.builder()
-                        .rowNumber(r + 1) // 1-indexed, matching what a person sees in Excel
+                        .rowNumber(r + 1)
                         .rollNumberRaw(rollRaw)
-                        .statusRaw(statusRaw);
+                        .statusRaw(statusRaw)
+                        .studentName(studentRaw);
 
                 String error = null;
                 String normalizedStatus = null;
@@ -127,9 +173,22 @@ public class AttendanceImportService {
                 }
 
                 if (error == null) {
-                    normalizedStatus = normalizeStatus(statusRaw);
-                    if (normalizedStatus == null) {
-                        error = "Invalid status '" + statusRaw + "' (use P/Present, A/Absent, or L/Late)";
+                    if (studentRaw == null || studentRaw.isBlank()) {
+                        error = "Student name is required for roll number " + rollRaw;
+                    } else if (matchedStudent != null
+                            && !normalizeStudentName(studentRaw).equals(normalizeStudentName(matchedStudent.getUser().getName()))) {
+                        error = "Student name does not match the class roster for roll number " + rollRaw;
+                    }
+                }
+
+                if (error == null) {
+                    if (statusRaw == null || statusRaw.isBlank()) {
+                        error = "Attendance status is required for every student (use P/Present, A/Absent, or L/Late)";
+                    } else {
+                        normalizedStatus = normalizeStatus(statusRaw);
+                        if (normalizedStatus == null) {
+                            error = "Invalid status '" + statusRaw + "' (use P/Present, A/Absent, or L/Late)";
+                        }
                     }
                 }
 
@@ -146,7 +205,6 @@ public class AttendanceImportService {
 
                 rb.normalizedStatus(normalizedStatus)
                   .studentId(matchedStudent != null ? matchedStudent.getId().toString() : null)
-                  .studentName(matchedStudent != null ? matchedStudent.getUser().getName() : null)
                   .duplicate(duplicate)
                   .error(error);
 
@@ -159,7 +217,14 @@ public class AttendanceImportService {
         }
 
         if (results.isEmpty()) {
-            throw new BadRequestException("No data rows found. Expecting a header row followed by 'Roll Number' and 'Status' columns.");
+            throw new BadRequestException("No data rows found. Expecting a header row followed by Roll Number, Student Name, and Status columns.");
+        }
+
+        Set<String> missingRolls = new HashSet<>(byRollNumber.keySet());
+        missingRolls.removeAll(seenInFile);
+        if (!missingRolls.isEmpty()) {
+            throw new BadRequestException("The uploaded file must include attendance for every student in the class. Missing roll numbers: "
+                    + String.join(", ", missingRolls) + ".");
         }
 
         AttendanceImport importDoc = AttendanceImport.builder()
@@ -188,8 +253,12 @@ public class AttendanceImportService {
         if (!importDoc.getTeacherId().equals(teacherUserId.toString())) {
             throw new UnauthorizedException("You may only confirm your own uploads");
         }
+        ensureCurrentTeacherIsClassTeacherForImport(importDoc, teacherUserId);
         if (!"PENDING_CONFIRMATION".equals(importDoc.getStatus())) {
             throw new BadRequestException("This import has already been " + importDoc.getStatus().toLowerCase());
+        }
+        if (importDoc.getErrorRows() > 0 || importDoc.getRows().stream().anyMatch(row -> row.getError() != null)) {
+            throw new BadRequestException("This import contains validation errors and cannot be confirmed.");
         }
 
         Subject subject = subjectRepository.findById(UUID.fromString(importDoc.getSubjectId()))
@@ -255,11 +324,23 @@ public class AttendanceImportService {
         if (!importDoc.getTeacherId().equals(teacherUserId.toString())) {
             throw new UnauthorizedException("You may only discard your own uploads");
         }
+        ensureCurrentTeacherIsClassTeacherForImport(importDoc, teacherUserId);
         if (!"PENDING_CONFIRMATION".equals(importDoc.getStatus())) {
             throw new BadRequestException("This import has already been " + importDoc.getStatus().toLowerCase());
         }
         importDoc.setStatus("DISCARDED");
         attendanceImportRepository.save(importDoc);
+    }
+
+    private void ensureCurrentTeacherIsClassTeacherForImport(AttendanceImport importDoc, UUID teacherUserId) {
+        UUID classId = UUID.fromString(importDoc.getClassId());
+        ClassEntity klass = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found"));
+        Teacher teacher = teacherRepository.findByUserId(teacherUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Teacher not found"));
+        if (klass.getClassTeacher() == null || !klass.getClassTeacher().getId().equals(teacher.getId())) {
+            throw new UnauthorizedException("You are not the assigned class teacher for this class");
+        }
     }
 
     public AttendanceImport getDetail(String importId) {
@@ -347,6 +428,10 @@ public class AttendanceImportService {
         return com.edutrack.util.AttendanceStatusNormalizer.normalizeStatus(raw);
     }
 
+    private String buildExpectedFileName(LocalDate date) {
+        return String.format("attendance-%02d-%02d-%04d.xlsx", date.getDayOfMonth(), date.getMonthValue(), date.getYear());
+    }
+
     private String readCellAsString(Cell cell) {
         if (cell == null) return null;
         if (cell.getCellType() == CellType.STRING) return cell.getStringCellValue().trim();
@@ -356,7 +441,29 @@ public class AttendanceImportService {
             return String.valueOf(d);
         }
         if (cell.getCellType() == CellType.BOOLEAN) return String.valueOf(cell.getBooleanCellValue());
-        if (cell.getCellType() == CellType.FORMULA) return cell.getCellFormula();
+        if (cell.getCellType() == CellType.FORMULA) {
+            try {
+                return cell.getStringCellValue().trim();
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
         return null;
     }
+
+    private boolean headerCellEquals(Cell cell, String expectedValue) {
+        String raw = readCellAsString(cell);
+        return expectedValue.equals(raw != null ? raw.trim() : raw);
+    }
+
+    private String normalizeHeader(String raw) {
+        if (raw == null) return "";
+        return raw.trim().toLowerCase();
+    }
+
+    private String normalizeStudentName(String value) {
+        if (value == null) return "";
+        return value.trim().replaceAll("\\s+", " ").toLowerCase();
+    }
 }
+
