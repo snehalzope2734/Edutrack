@@ -1,153 +1,164 @@
-# 🎓 EduTrack — Smart School Management System
+<div align="center">
 
-EduTrack is a modern, single-school management web application built with **Java 21 (Spring Boot 3)** on the backend and **React 19 (Tailwind CSS)** on the frontend. 
+  # 🎓 EduTrack — Smart School Management System
+  
+  **An enterprise-grade, full-stack educational management platform engineered with Java 21 (Spring Boot 3) & React 19.**
 
-It provides dedicated, secure dashboards for **Admins**, **Teachers**, and **Students**, complete with a smooth dark/light mode toggle, Excel-based class attendance management, direct student-to-admin profile change requests, and local PDF study material storage.
+  [![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/)
+  [![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.2.5-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+  [![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+  [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.0-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+  [![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+  [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
+
+  [Features](#-key-features) • [Architecture](#-system-architecture) • [Database Design](#-database-design) • [API Specs](#-api-documentation) • [Setup Guide](#-getting-started)
+
+</div>
 
 ---
 
-## ✨ Features at a Glance
+## 📌 Executive Summary
 
-### 🌙 1. Smooth Dark Mode Engine
-- Integrated 3-mode theme switcher (**Light**, **Dark**, **System Preference**) with `localStorage` persistence.
-- High-contrast form controls and browser autofill overrides for comfortable viewing.
+**EduTrack** is a centralized, single-institution management system designed to streamline administrative workflows, academic evaluation, attendance tracking, and student communication. It replaces legacy manual paperwork with automated, role-based workflows, high-security server-side authorization, and an intuitive responsive user experience.
 
-### 📅 2. Class Teacher Attendance Management
-- **Class Teacher Authorization:** Attendance upload is strictly restricted to the assigned Class Teacher for that class.
-- **Roster Template Download:** Class Teachers can download a `.xlsx` template pre-populated with student roll numbers and names.
-- **Excel Batch Import:** Teachers fill in `P` (Present), `A` (Absent), or `L` (Late) and upload. The system provides a validation preview before committing to the database.
-- **Daily Student Tracking:** Students can view their daily updated attendance records and subject attendance percentages.
+---
+
+## ✨ Key Features
+
+### 🌙 1. Enterprise Dark / Light Mode System
+- **Context-Aware Theme Engine:** Built with persistent 3-mode selection (**Light**, **Dark**, **System Preference**) using custom CSS variables and Tailwind CSS.
+- **Accessible & High Contrast:** Webkit autofill overrides and optimized color palettes to prevent eye fatigue during high-volume data entry.
+
+### 📅 2. Excel-Based Class Attendance Management
+- **Class Teacher Restriction:** Attendance uploads are restricted server-side strictly to the designated Class Teacher for each section.
+- **Automated `.xlsx` Template Generator:** Class Teachers can download a pre-populated Excel template containing all assigned student Roll Numbers and Names.
+- **Transaction-Safe Import Pipeline:** Uploaded sheets are parsed via Apache POI into a preview sandbox (validating duplicates, status integrity, and overwrite warnings) before batch-committing to PostgreSQL.
+- **Audit Trail:** Full import history logged in MongoDB (`attendance_imports`) for compliance and auditing.
 
 ### 📝 3. Direct Student-to-Admin Change Requests
-- Students can request updates to their profile details (e.g. phone number, address, parent details).
-- Requests go **directly to Admin** for immediate review, approval, or rejection (bypassing unnecessary teacher verification steps).
+- **Direct Approval Workflow:** Students can submit profile update requests (e.g. phone, address, parent info) directly to the School Admin.
+- **Bypassed Bottlenecks:** Eliminates intermediate teacher verification delays, allowing Admins to review, approve, or reject requests with instant notifications.
 
 ### 📚 4. Study Materials & Local File Storage
-- Teachers can upload PDF notes for their assigned classes and subjects.
-- Files are saved directly to local storage (`./uploads/`) and served securely by Spring Boot without requiring external Cloudinary configuration.
-- Includes inline PDF preview, zoom controls, and direct downloads for students.
+- **PDF-Only Document Repository:** Teachers can publish study materials and notes for specific classes and subjects.
+- **Zero-Cloud Local Storage:** Engineered with a Spring Boot `FileStorageService` storing files on disk (`./uploads/`) and serving them statically over `/uploads/**`, eliminating third-party API costs.
+- **Interactive PDF Preview:** Features built-in iframe PDF previewer with zoom controls, fullscreen mode, and direct download links.
 
 ---
 
-## 🛠️ Technology Stack
+## 🏗️ System Architecture
 
-| Layer | Technologies |
-|---|---|
-| **Frontend** | React 19, Redux Toolkit, React Router v6, Tailwind CSS, Lucide Icons, Vite |
-| **Backend** | Java 21, Spring Boot 3.2, Spring Security (JWT), Spring Data JPA, Spring Data MongoDB |
-| **Databases** | **PostgreSQL** (Users, Classes, Attendance, Marks, Timetable, Change Requests) <br> **MongoDB** (Notifications, Study Materials, Audit Logs) |
-| **Storage & Tools** | Apache POI (Excel generation/parsing), Local Disk File Storage (`/uploads/`) |
-
----
-
-## 📁 Repository Layout
-
-```
-Edu-track/
-├── backend/                  # Spring Boot REST API
-│   ├── src/main/java/        # Controllers, Services, Entities & Security
-│   ├── src/main/resources/   # App configuration & Flyway SQL migrations
-│   └── uploads/              # Local file upload storage
-├── frontend/                 # React SPA
-│   ├── src/components/       # Reusable components & Theme context
-│   ├── src/pages/            # Admin, Teacher, and Student views
-│   └── src/api/              # Axios API client functions
-└── README.md
+```mermaid
+graph TD
+    Client[React 19 SPA + Vite + Tailwind] -->|HTTP / REST + JWT| Security[Spring Security 6 + JwtFilter]
+    Security -->|Authorize Role| Guard[OwnershipGuard IDOR Check]
+    Guard -->|Service Logic| Controller[REST Controllers]
+    Controller -->|JPA Transactions| Postgres[(PostgreSQL 16\nUsers, Classes, Attendance, Marks)]
+    Controller -->|Document Operations| Mongo[(MongoDB Atlas\nMaterials, Notifications, Audit Logs)]
+    Controller -->|Multipart Storage| Disk[(Local Disk Storage\n./uploads/)]
 ```
 
+### Authorization & IDOR Protection Layer
+Every API invocation undergoes server-side ownership verification via [`OwnershipGuard.java`](backend/src/main/java/com/edutrack/security/OwnershipGuard.java):
+- **Students** can strictly view their own attendance, marks, and profile details.
+- **Teachers** can only access classes, subjects, and students assigned to their teaching schedule.
+- **Admins** maintain global administrative control across all resources.
+
 ---
 
-## 🚀 How to Run the Project Locally
+## 🗄️ Database Design
+
+EduTrack utilizes a **polyglot persistence model** to balance relational integrity with document flexibility:
+
+### 1. Relational Database (PostgreSQL)
+- **`users`**: Central credentials, roles (`ADMIN`, `TEACHER`, `STUDENT`), and authentication state.
+- **`students`**: Personal profile, parent contact info, class mapping, roll number, and admission records.
+- **`teachers`**: Designation, employee ID, qualification, and class teacher assignments.
+- **`classes` & `subjects`**: Academic structure, class-subject assignments, and timetable mappings.
+- **`attendance`**: Daily attendance records (`P`, `A`, `L`) normalized per student/date.
+- **`change_requests`**: Profile update request pipeline (`PENDING`, `APPROVED`, `REJECTED`).
+
+### 2. Document Database (MongoDB)
+- **`study_materials`**: PDF notes metadata, category tags, file size, and upload references.
+- **`attendance_imports`**: Full audit log of all raw Excel imports (confirmed or discarded).
+- **`notifications`**: Real-time user notification logs.
+
+---
+
+## 🔌 API Documentation
+
+| Method | Endpoint | Access | Description |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | Public | Authenticates user and returns JWT token |
+| `GET` | `/api/users/me` | Authenticated | Retrieves active user profile |
+| `GET` | `/api/student/me` | `STUDENT` | Fetches complete student profile data |
+| `GET` | `/api/attendance/template/{classId}` | `TEACHER` | Downloads pre-filled Excel roster template |
+| `POST` | `/api/attendance/imports/preview` | `TEACHER` | Validates uploaded attendance sheet |
+| `POST` | `/api/attendance/imports/{id}/confirm` | `TEACHER` | Batch commits attendance rows to PostgreSQL |
+| `GET` | `/api/materials` | `STUDENT`, `TEACHER` | Lists PDF study materials for class/subject |
+| `POST` | `/api/cloudinary/upload` | `TEACHER`, `ADMIN` | Stores files to local storage (`/uploads/`) |
+| `GET` | `/api/admin/change-requests` | `ADMIN` | Reviews pending profile change requests |
+| `POST` | `/api/admin/change-requests/{id}/review` | `ADMIN` | Approves or rejects a student change request |
+
+---
+
+## 💻 Getting Started
 
 ### Prerequisites
-Make sure you have the following installed:
-- **Java 21** or later
+- **Java Development Kit (JDK 21+)**
 - **Maven 3.8+**
-- **Node.js 18+** & **npm**
-- **PostgreSQL** (version 15+)
-- **MongoDB** (local service or MongoDB Atlas cluster)
+- **Node.js 18+ & npm**
+- **PostgreSQL 15+**
+- **MongoDB 6.0+**
 
----
-
-### Step 1: Database Setup
-1. Create a local PostgreSQL database named `edutrack`:
-   ```sql
-   CREATE DATABASE edutrack;
-   ```
-   *(Flyway will automatically create all required tables on first boot).*
-
-2. Make sure MongoDB is running locally at `mongodb://localhost:27017` (or provide your MongoDB Atlas URI in configuration).
-
----
-
-### Step 2: Configure Environment (Optional)
-Check `backend/src/main/resources/application-dev.properties`. If your local PostgreSQL username/password differs, update these lines:
-
-```properties
-spring.datasource.username=postgres
-spring.datasource.password=your_password
-```
-
----
-
-### Step 3: Run the Backend
-
-Open a terminal in the `backend` folder:
-
+### 1. Backend Setup
 ```bash
-cd backend
+# Clone the repository
+git clone https://github.com/snehalzope2734/Edutrack.git
+cd Edutrack/backend
+
+# Configure local application settings (if Postgres password differs)
+# Edit src/main/resources/application-dev.properties
+
+# Run Spring Boot backend
 mvn spring-boot:run -DskipTests
 ```
+*The backend server will launch on `http://localhost:8080`.*
 
-The Spring Boot backend will start on **`http://localhost:8080`**.
-
-> **First-Boot Admin Account:**  
-> On first startup, if no Admin account exists, one will be created automatically:  
-> - **Email:** `admin@gmail.com`  
-> - **Password:** `admin@123`  
-
----
-
-### Step 4: Run the Frontend
-
-Open a second terminal in the `frontend` folder:
-
+### 2. Frontend Setup
 ```bash
-cd frontend
+# Open a new terminal in the frontend directory
+cd Edutrack/frontend
+
+# Install dependencies
 npm install
+
+# Start Vite development server
 npm run dev
 ```
-
-Visit **`http://localhost:5173`** in your browser to log in and test the application!
-
----
-
-## 🔒 Security & Authorization
-
-- **JWT Authentication:** Stateless authentication using JWT tokens.
-- **Server-Side Ownership Enforcement:** Authorization is validated server-side (`OwnershipGuard.java`) so users cannot access data outside their assigned class or role.
-- **Role Permissions:**
-  - `ADMIN`: Full management of school settings, teachers, students, exam schedules, and profile change requests.
-  - `TEACHER`: Upload attendance (Class Teachers), upload PDF materials, manage marks and report cards.
-  - `STUDENT`: View timetable, attendance, marks, study materials, and submit profile change requests.
+*The React application will open on `http://localhost:5173`.*
 
 ---
 
-## 📦 Single JAR Production Build
+## 🔑 Default Administrator Credentials
 
-To package the frontend and backend into a single runnable JAR file:
+On first boot, if no `ADMIN` user exists, the application bootstraps a default administrator:
+- **Email:** `admin@gmail.com`
+- **Password:** `admin@123`
 
-```bash
-# 1. Build the frontend
-cd frontend
-npm run build
+*Note: Please update the default password immediately after first login.*
 
-# 2. Package Spring Boot JAR
-cd ../backend
-mvn clean package -DskipTests
+---
 
-# 3. Run the executable JAR
-java -jar target/edutrack-api-1.0.0.jar
-```
+## 📄 License
 
-Now the application can be accessed directly at `http://localhost:8080`.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
+
+---
+
+<div align="center">
+
+Developed with ❤️ by **[Snehal Zope](https://github.com/snehalzope2734)**
+
+</div>
