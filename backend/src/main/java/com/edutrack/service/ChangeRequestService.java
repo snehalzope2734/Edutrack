@@ -11,8 +11,6 @@ import com.edutrack.model.entity.Student;
 import com.edutrack.model.entity.User;
 import com.edutrack.repository.supabase.ChangeRequestRepository;
 import com.edutrack.repository.supabase.StudentRepository;
-import com.edutrack.repository.supabase.SubjectRepository;
-import com.edutrack.repository.supabase.TeacherRepository;
 import com.edutrack.repository.supabase.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -43,8 +41,6 @@ public class ChangeRequestService {
     private final ChangeRequestRepository changeRequestRepository;
     private final StudentRepository studentRepository;
     private final UserRepository userRepository;
-    private final SubjectRepository subjectRepository;
-    private final TeacherRepository teacherRepository;
     private final NotificationService notificationService;
 
     @Transactional
@@ -85,10 +81,14 @@ public class ChangeRequestService {
                 .attachmentNames(req.attachmentNames())
                 .status("PENDING")
                 .verificationStatus("PENDING")
-                .auditLog("Student submitted request")
+                .auditLog("Student submitted request directly to Admin")
                 .build();
 
         ChangeRequest savedRequest = changeRequestRepository.save(changeRequest);
+
+        // Notify Admin directly when student creates a request
+        notifyAdminNewRequest(savedRequest, requester);
+
         return toDto(savedRequest);
     }
 
@@ -107,15 +107,7 @@ public class ChangeRequestService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> pendingForTeacher(UUID classId, String status) {
-        List<ChangeRequest> requests;
-
-        if (status != null && !status.isBlank()) {
-            requests = changeRequestRepository.findByStudentClassEntityIdAndStatus(classId, status);
-        } else {
-            requests = changeRequestRepository.findByStudentClassEntityId(classId);
-        }
-
-        return requests.stream().map(this::toDto).toList();
+        throw new UnauthorizedException("Teachers no longer process change requests; requests go directly to Admin.");
     }
 
     @Transactional(readOnly = true)
@@ -135,89 +127,39 @@ public class ChangeRequestService {
     public Map<String, Object> review(UUID id, ChangeRequestReviewRequest request, UUID reviewerUserId) {
         ChangeRequest changeRequest = changeRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Change request not found"));
-                System.out.println("hii");
-        String action = request.action() != null ? request.action() : request.status();
-        String normalizedAction = action == null ? "" : action.trim().toUpperCase();
-        String comment = request.comment() == null ? "" : request.comment().trim();
-        String recommendation = request.recommendation() == null ? "" : request.recommendation().trim();
 
         User reviewer = userRepository.findById(reviewerUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if ("TEACHER".equals(reviewer.getRole())) {
-            UUID teacherId = teacherRepository.findByUserId(reviewerUserId)
-                    .orElseThrow(() -> new UnauthorizedException("Teacher profile not found"))
-                    .getId();
-
-            boolean teachesThisStudentsClass = subjectRepository.findByTeacherId(teacherId).stream().anyMatch(subject ->
-                    subject.getClassEntity() != null
-                            && changeRequest.getStudent().getClassEntity() != null
-                            && subject.getClassEntity().getId().equals(changeRequest.getStudent().getClassEntity().getId()));
-
-            if (!teachesThisStudentsClass) {
-                throw new UnauthorizedException("You may only review requests from students in classes you teach");
-            }
-
-            if ("APPROVE".equals(normalizedAction) || "REJECT".equals(normalizedAction)) {
-                throw new UnauthorizedException("Teachers may only verify, clarify, or forward requests to admin");
-            }
-
-            if ("VERIFY".equals(normalizedAction) || "VERIFIED".equals(normalizedAction)) {
-                changeRequest.setStatus("VERIFIED");
-                changeRequest.setVerificationStatus("VERIFIED");
-                changeRequest.setTeacherComment(comment.isBlank() ? "Verified by teacher" : comment);
-                changeRequest.setTeacherRecommendation(recommendation.isBlank() ? "Request verified by teacher" : recommendation);
-                appendAuditEntry(changeRequest, reviewer.getName() + " verified the request");
-            } else if ("CLARIFICATION".equals(normalizedAction) || "CLARIFICATION_NEEDED".equals(normalizedAction)) {
-                changeRequest.setStatus("CLARIFICATION_NEEDED");
-                changeRequest.setVerificationStatus("CLARIFICATION_NEEDED");
-                changeRequest.setTeacherComment(comment.isBlank() ? "Clarification requested by teacher" : comment);
-                changeRequest.setTeacherRecommendation(recommendation.isBlank() ? "Needs clarification before forwarding" : recommendation);
-                appendAuditEntry(changeRequest, reviewer.getName() + " requested clarification");
-            } else if ("FORWARD".equals(normalizedAction) || "FORWARDED".equals(normalizedAction) || "FORWARD_TO_ADMIN".equals(normalizedAction)) {
-                changeRequest.setStatus("FORWARDED");
-                changeRequest.setVerificationStatus("FORWARDED");
-                changeRequest.setTeacherComment(comment.isBlank() ? "Forwarded to admin for final review" : comment);
-                changeRequest.setTeacherRecommendation(recommendation.isBlank() ? "Recommendation prepared for admin" : recommendation);
-                changeRequest.setForwardedToAdminAt(Instant.now());
-                appendAuditEntry(changeRequest, reviewer.getName() + " forwarded the request to admin");
-                notifyAdmin(changeRequest, reviewer);
-            } else {
-                throw new BadRequestException("Unsupported teacher action");
-            }
-        } else if ("ADMIN".equals(reviewer.getRole())) {
-            if (!"FORWARDED".equals(changeRequest.getStatus()) && !"VERIFIED".equals(changeRequest.getStatus()) && !"PENDING".equals(changeRequest.getStatus())) {
-                if (!"APPROVED".equals(changeRequest.getStatus()) && !"REJECTED".equals(changeRequest.getStatus())) {
-                    throw new BadRequestException("Only forwarded requests can be finalized by admin");
-                }
-            }
-
-            if ("APPROVE".equals(normalizedAction) || "APPROVED".equals(normalizedAction)) {
-                changeRequest.setStatus("APPROVED");
-                changeRequest.setVerificationStatus("APPROVED");
-                changeRequest.setAdminComment(comment.isBlank() ? "Approved by admin" : comment);
-                changeRequest.setReviewedBy(reviewer);
-                changeRequest.setReviewedAt(Instant.now());
-                appendAuditEntry(changeRequest, reviewer.getName() + " approved the request");
-                applyChange(changeRequest);
-                notifyStudent(changeRequest, reviewer);
-            } else if ("REJECT".equals(normalizedAction) || "REJECTED".equals(normalizedAction)) {
-                changeRequest.setStatus("REJECTED");
-                changeRequest.setVerificationStatus("REJECTED");
-                changeRequest.setAdminComment(comment.isBlank() ? "Rejected by admin" : comment);
-                changeRequest.setReviewedBy(reviewer);
-                changeRequest.setReviewedAt(Instant.now());
-                appendAuditEntry(changeRequest, reviewer.getName() + " rejected the request");
-                notifyStudent(changeRequest, reviewer);
-            } else {
-                throw new BadRequestException("Unsupported admin decision");
-            }
-        } else {
-            throw new UnauthorizedException("Only teachers and admins can review change requests");
+        if (!"ADMIN".equals(reviewer.getRole())) {
+            throw new UnauthorizedException("Only admins can review profile change requests");
         }
 
-        changeRequest.setReviewedBy(reviewer);
-        changeRequest.setReviewedAt(Instant.now());
+        String action = request.action() != null ? request.action() : request.status();
+        String normalizedAction = action == null ? "" : action.trim().toUpperCase();
+        String comment = request.comment() == null ? "" : request.comment().trim();
+
+        if ("APPROVE".equals(normalizedAction) || "APPROVED".equals(normalizedAction)) {
+            changeRequest.setStatus("APPROVED");
+            changeRequest.setVerificationStatus("APPROVED");
+            changeRequest.setAdminComment(comment.isBlank() ? "Approved by admin" : comment);
+            changeRequest.setReviewedBy(reviewer);
+            changeRequest.setReviewedAt(Instant.now());
+            appendAuditEntry(changeRequest, reviewer.getName() + " approved the request");
+            applyChange(changeRequest);
+            notifyStudent(changeRequest, reviewer);
+        } else if ("REJECT".equals(normalizedAction) || "REJECTED".equals(normalizedAction)) {
+            changeRequest.setStatus("REJECTED");
+            changeRequest.setVerificationStatus("REJECTED");
+            changeRequest.setAdminComment(comment.isBlank() ? "Rejected by admin" : comment);
+            changeRequest.setReviewedBy(reviewer);
+            changeRequest.setReviewedAt(Instant.now());
+            appendAuditEntry(changeRequest, reviewer.getName() + " rejected the request");
+            notifyStudent(changeRequest, reviewer);
+        } else {
+            throw new BadRequestException("Unsupported admin decision. Use APPROVE or REJECT.");
+        }
+
         ChangeRequest savedRequest = changeRequestRepository.save(changeRequest);
         return toDto(savedRequest);
     }
@@ -230,25 +172,25 @@ public class ChangeRequestService {
         changeRequest.setAuditLog(next);
     }
 
-    private void notifyAdmin(ChangeRequest changeRequest, User reviewer) {
-        String studentName = changeRequest.getStudent().getUser().getName();
+    private void notifyAdminNewRequest(ChangeRequest changeRequest, User studentUser) {
+        String studentName = studentUser.getName();
         NotificationRequest req = new NotificationRequest(
-                "New profile change request",
-                studentName + " submitted a profile update request that needs admin review.",
+                "New Profile Change Request",
+                studentName + " submitted a profile update request for " + prettyFieldName(changeRequest.getFieldName()) + ".",
                 "alert",
                 List.of("ADMIN"),
                 changeRequest.getStudent().getClassEntity() != null ? changeRequest.getStudent().getClassEntity().getId().toString() : null
         );
-        notificationService.create(req, reviewer.getId().toString(), reviewer.getRole());
+        notificationService.create(req, studentUser.getId().toString(), studentUser.getRole());
     }
 
     private void notifyStudent(ChangeRequest changeRequest, User reviewer) {
         User studentUser = changeRequest.getStudent().getUser();
         String status = changeRequest.getStatus();
-        String title = status.equals("APPROVED") ? "Profile change approved" : "Profile change update";
+        String title = status.equals("APPROVED") ? "Profile Change Approved" : "Profile Change Rejected";
         String message = status.equals("APPROVED")
-                ? "Your profile change request was approved by the admin."
-                : "Your profile change request was reviewed and returned for further action.";
+                ? "Your profile change request for " + prettyFieldName(changeRequest.getFieldName()) + " was approved by the admin."
+                : "Your profile change request for " + prettyFieldName(changeRequest.getFieldName()) + " was rejected by the admin. Comment: " + (changeRequest.getAdminComment() != null ? changeRequest.getAdminComment() : "None");
         NotificationRequest req = new NotificationRequest(
                 title,
                 message,

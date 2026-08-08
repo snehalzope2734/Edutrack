@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -20,10 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Attendance is recorded ONLY via teacher-uploaded Excel files. There is no
- * manual per-student marking endpoint by design (see AttendanceImportService
- * for the rationale) — corrections happen by re-uploading a corrected file,
- * which itself becomes a new, auditable import record.
+ * Attendance is recorded ONLY via Class Teacher-uploaded Excel files.
  */
 @RestController
 @RequestMapping("/api/attendance")
@@ -32,6 +31,20 @@ public class AttendanceController {
 
     private final AttendanceImportService attendanceImportService;
     private final OwnershipGuard ownershipGuard;
+
+    // ---- Excel template download for Class Teachers ----
+
+    @GetMapping("/template/{classId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    public ResponseEntity<byte[]> downloadTemplate(@PathVariable UUID classId) {
+        ownershipGuard.assertCanViewClass(classId);
+        byte[] excelBytes = attendanceImportService.generateTemplate(classId, CurrentUser.id());
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=attendance_roster_template.xlsx")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
+    }
 
     // ---- Excel import workflow ----
 
@@ -42,7 +55,6 @@ public class AttendanceController {
             @RequestParam UUID classId,
             @RequestParam UUID subjectId,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
-        ownershipGuard.assertOwnsSubject(subjectId);
         ownershipGuard.assertCanViewClass(classId);
         return ResponseEntity.ok(attendanceImportService.preview(file, classId, subjectId, date, CurrentUser.id()));
     }
@@ -63,8 +75,6 @@ public class AttendanceController {
     @GetMapping("/imports/{importId}")
     @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
     public ResponseEntity<AttendanceImport> importDetail(@PathVariable String importId) {
-        // Ownership (own upload vs admin) is enforced inside the service for mutating
-        // actions; detail view is read-only so we simply require TEACHER/ADMIN here.
         return ResponseEntity.ok(attendanceImportService.getDetail(importId));
     }
 
@@ -86,7 +96,6 @@ public class AttendanceController {
             @RequestParam UUID subjectId,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         ownershipGuard.assertCanViewClass(classId);
-        if (CurrentUser.isTeacher()) ownershipGuard.assertOwnsSubject(subjectId);
         return ResponseEntity.ok(attendanceImportService.classGrid(classId, subjectId, date));
     }
 

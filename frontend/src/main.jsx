@@ -7,16 +7,20 @@ import "./index.css";
 import App from "./App.jsx";
 import { store } from "./store/store";
 import ErrorBoundary from "./components/common/ErrorBoundary";
+import { ThemeProvider } from "./context/ThemeContext";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <Provider store={store}>
-      <BrowserRouter>
-        <ErrorBoundary>
-          <App />
-        </ErrorBoundary>
-        <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
-      </BrowserRouter>
+      <ThemeProvider>
+        <BrowserRouter>
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
+          <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
+        </BrowserRouter>
+      </ThemeProvider>
     </Provider>
   </StrictMode>
 );
+

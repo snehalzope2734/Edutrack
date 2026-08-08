@@ -1,4 +1,5 @@
 package com.edutrack.service;
+
 import com.edutrack.model.enums.AttendanceStatus;
 import com.edutrack.exception.BadRequestException;
 import com.edutrack.exception.ResourceNotFoundException;
@@ -8,27 +9,32 @@ import com.edutrack.model.entity.Attendance;
 import com.edutrack.model.entity.ClassEntity;
 import com.edutrack.model.entity.Student;
 import com.edutrack.model.entity.Subject;
+import com.edutrack.model.entity.Teacher;
 
 import com.edutrack.repository.mongodb.AttendanceImportRepository;
 import com.edutrack.repository.supabase.AttendanceRepository;
 import com.edutrack.repository.supabase.ClassRepository;
 import com.edutrack.repository.supabase.StudentRepository;
 import com.edutrack.repository.supabase.SubjectRepository;
+import com.edutrack.repository.supabase.TeacherRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import com.edutrack.model.entity.Teacher;
-import com.edutrack.repository.supabase.TeacherRepository;
+
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
@@ -44,30 +50,60 @@ import java.util.UUID;
 
 /**
  * Attendance enters the system exclusively through this Excel import pipeline:
- * a teacher uploads a .xlsx for one class/subject/date, gets a row-level preview
- * (including validation errors and duplicate/overwrite flags) and then explicitly
- * confirms before anything is written to the Attendance table. There is
- * deliberately no endpoint to mark or edit a single student's attendance directly —
- * corrections are made by re-uploading a corrected file, which is itself recorded
- * as a new import, giving a full audit trail of every change.
+ * only the assigned Class Teacher can download the class roster template and
+ * upload the filled .xlsx attendance for their class/date.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AttendanceImportService {
 
-    private static final long MAX_FILE_SIZE_BYTES = 5L * 1024 * 1024; // 5MB is generous for a class roster
+    private static final long MAX_FILE_SIZE_BYTES = 5L * 1024 * 1024; // 5MB limit
 
     private final AttendanceImportRepository attendanceImportRepository;
     private final AttendanceRepository attendanceRepository;
     private final StudentRepository studentRepository;
     private final SubjectRepository subjectRepository;
     private final ClassRepository classRepository;
-  
     private final TeacherRepository teacherRepository;
 
     @Transactional(readOnly = true)
+    public byte[] generateTemplate(UUID classId, UUID teacherUserId) {
+        ensureCurrentTeacherIsClassTeacher(classId, teacherUserId);
+        List<Student> students = studentRepository.findByClassEntityId(classId);
+
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("Attendance Roster");
+
+            Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("Roll Number");
+            header.createCell(1).setCellValue("Student Name");
+            header.createCell(2).setCellValue("Status");
+
+            int rowIdx = 1;
+            for (Student student : students) {
+                Row row = sheet.createRow(rowIdx++);
+                row.createCell(0).setCellValue(student.getRollNumber() != null ? student.getRollNumber() : "");
+                row.createCell(1).setCellValue(student.getUser() != null ? student.getUser().getName() : "");
+                row.createCell(2).setCellValue(""); // Left blank for teacher to enter P / A / L
+            }
+
+            sheet.autoSizeColumn(0);
+            sheet.autoSizeColumn(1);
+            sheet.autoSizeColumn(2);
+
+            workbook.write(out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new BadRequestException("Failed to generate Excel template: " + e.getMessage());
+        }
+    }
+
+    @Transactional(readOnly = true)
     public AttendanceImport preview(MultipartFile file, UUID classId, UUID subjectId, LocalDate date, UUID teacherUserId) {
+        ensureCurrentTeacherIsClassTeacher(classId, teacherUserId);
+
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("Please attach an Excel (.xlsx) file");
         }
@@ -76,11 +112,7 @@ public class AttendanceImportService {
         }
         String filename = file.getOriginalFilename();
         if (filename == null || !filename.toLowerCase().endsWith(".xlsx")) {
-            throw new BadRequestException("Only .xlsx files are supported. Rename the file to '" + buildExpectedFileName(date) + "'.");
-        }
-
-        if (!filename.equals(buildExpectedFileName(date))) {
-            throw new BadRequestException("The file name must be exactly '" + buildExpectedFileName(date) + "'.");
+            throw new BadRequestException("Only .xlsx files are supported.");
         }
 
         Subject subject = subjectRepository.findById(subjectId)
@@ -106,7 +138,7 @@ public class AttendanceImportService {
             Row header = sheet.getRow(0);
 
             if (header == null || header.getLastCellNum() < 3) {
-                throw new BadRequestException("Invalid workbook header. The first row must contain exactly: Roll Number, Student Name, Status.");
+                throw new BadRequestException("Invalid workbook header. The first row must contain: Roll Number, Student Name, Status.");
             }
 
             Map<String, Integer> headerIndex = new HashMap<>();
@@ -117,21 +149,14 @@ public class AttendanceImportService {
                 }
             }
 
-            if (!headerIndex.keySet().equals(Set.of("roll number", "student name", "status"))
-                    || headerIndex.get("roll number") != 0
-                    || headerIndex.get("student name") != 1
-                    || headerIndex.get("status") != 2) {
-                throw new BadRequestException("Invalid workbook header. The first row must contain exactly: Roll Number, Student Name, Status in that order.");
+            if (!headerIndex.containsKey("roll number") || !headerIndex.containsKey("student name") || !headerIndex.containsKey("status")) {
+                throw new BadRequestException("Invalid workbook header. Expecting columns: Roll Number, Student Name, Status.");
             }
-
-            log.debug("Detected Headers: Roll Number -> Column {}, Student Name -> Column {}, Status -> Column {}",
-                    headerIndex.get("roll number"), headerIndex.get("student name"), headerIndex.get("status"));
 
             int rollColumn = headerIndex.get("roll number");
             int studentColumn = headerIndex.get("student name");
             int statusColumn = headerIndex.get("status");
 
-            // Row 1 and below are attendance entries.
             for (int r = 1; r <= lastRow; r++) {
                 Row row = sheet.getRow(r);
                 if (row == null) continue;
@@ -140,12 +165,10 @@ public class AttendanceImportService {
                 String studentRaw = readCellAsString(row.getCell(studentColumn));
                 String statusRaw = readCellAsString(row.getCell(statusColumn));
 
-                log.debug("Row {}: Roll = {}, Student = {}, Status = {}", r + 1, rollRaw, studentRaw, statusRaw);
-
                 if ((rollRaw == null || rollRaw.isBlank())
                         && (studentRaw == null || studentRaw.isBlank())
                         && (statusRaw == null || statusRaw.isBlank())) {
-                    continue; // skip fully blank trailing rows
+                    continue;
                 }
 
                 AttendanceImport.RowResult.RowResultBuilder rb = AttendanceImport.RowResult.builder()
@@ -175,15 +198,12 @@ public class AttendanceImportService {
                 if (error == null) {
                     if (studentRaw == null || studentRaw.isBlank()) {
                         error = "Student name is required for roll number " + rollRaw;
-                    } else if (matchedStudent != null
-                            && !normalizeStudentName(studentRaw).equals(normalizeStudentName(matchedStudent.getUser().getName()))) {
-                        error = "Student name does not match the class roster for roll number " + rollRaw;
                     }
                 }
 
                 if (error == null) {
                     if (statusRaw == null || statusRaw.isBlank()) {
-                        error = "Attendance status is required for every student (use P/Present, A/Absent, or L/Late)";
+                        error = "Attendance status is required (use P/Present, A/Absent, or L/Late)";
                     } else {
                         normalizedStatus = normalizeStatus(statusRaw);
                         if (normalizedStatus == null) {
@@ -217,14 +237,7 @@ public class AttendanceImportService {
         }
 
         if (results.isEmpty()) {
-            throw new BadRequestException("No data rows found. Expecting a header row followed by Roll Number, Student Name, and Status columns.");
-        }
-
-        Set<String> missingRolls = new HashSet<>(byRollNumber.keySet());
-        missingRolls.removeAll(seenInFile);
-        if (!missingRolls.isEmpty()) {
-            throw new BadRequestException("The uploaded file must include attendance for every student in the class. Missing roll numbers: "
-                    + String.join(", ", missingRolls) + ".");
+            throw new BadRequestException("No data rows found. Expecting Roll Number, Student Name, and Status columns.");
         }
 
         AttendanceImport importDoc = AttendanceImport.builder()
@@ -250,10 +263,8 @@ public class AttendanceImportService {
         AttendanceImport importDoc = attendanceImportRepository.findById(importId)
                 .orElseThrow(() -> new ResourceNotFoundException("Import not found"));
 
-        if (!importDoc.getTeacherId().equals(teacherUserId.toString())) {
-            throw new UnauthorizedException("You may only confirm your own uploads");
-        }
-        ensureCurrentTeacherIsClassTeacherForImport(importDoc, teacherUserId);
+        ensureCurrentTeacherIsClassTeacher(UUID.fromString(importDoc.getClassId()), teacherUserId);
+
         if (!"PENDING_CONFIRMATION".equals(importDoc.getStatus())) {
             throw new BadRequestException("This import has already been " + importDoc.getStatus().toLowerCase());
         }
@@ -263,7 +274,7 @@ public class AttendanceImportService {
 
         Subject subject = subjectRepository.findById(UUID.fromString(importDoc.getSubjectId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
-     
+
         Teacher teacherEntity = teacherRepository
                 .findByUserId(teacherUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Teacher not found"));
@@ -272,8 +283,7 @@ public class AttendanceImportService {
         for (AttendanceImport.RowResult row : importDoc.getRows()) {
             if (row.getError() != null || row.getStudentId() == null) continue;
 
-            Student student = studentRepository.findById(UUID.fromString(row.getStudentId()))
-                    .orElse(null);
+            Student student = studentRepository.findById(UUID.fromString(row.getStudentId())).orElse(null);
             if (student == null) continue;
 
             Attendance attendance = attendanceRepository
@@ -289,16 +299,14 @@ public class AttendanceImportService {
                             .attendanceDate(importDoc.getDate())
                             .build());
 
-            // Ensure teacher is always stored (both new and existing records)
             attendance.setTeacher(teacherEntity);
 
             switch (row.getNormalizedStatus()) {
-            case "P" -> attendance.setStatus(AttendanceStatus.PRESENT);
-            case "A" -> attendance.setStatus(AttendanceStatus.ABSENT);
-            case "L" -> attendance.setStatus(AttendanceStatus.LATE);
-            default -> throw new BadRequestException(
-                    "Invalid attendance status: " + row.getNormalizedStatus());
-        }
+                case "P" -> attendance.setStatus(AttendanceStatus.PRESENT);
+                case "A" -> attendance.setStatus(AttendanceStatus.ABSENT);
+                case "L" -> attendance.setStatus(AttendanceStatus.LATE);
+                default -> throw new BadRequestException("Invalid attendance status: " + row.getNormalizedStatus());
+            }
 
             attendanceRepository.save(attendance);
             imported++;
@@ -321,10 +329,7 @@ public class AttendanceImportService {
     public void discard(String importId, UUID teacherUserId) {
         AttendanceImport importDoc = attendanceImportRepository.findById(importId)
                 .orElseThrow(() -> new ResourceNotFoundException("Import not found"));
-        if (!importDoc.getTeacherId().equals(teacherUserId.toString())) {
-            throw new UnauthorizedException("You may only discard your own uploads");
-        }
-        ensureCurrentTeacherIsClassTeacherForImport(importDoc, teacherUserId);
+        ensureCurrentTeacherIsClassTeacher(UUID.fromString(importDoc.getClassId()), teacherUserId);
         if (!"PENDING_CONFIRMATION".equals(importDoc.getStatus())) {
             throw new BadRequestException("This import has already been " + importDoc.getStatus().toLowerCase());
         }
@@ -332,14 +337,13 @@ public class AttendanceImportService {
         attendanceImportRepository.save(importDoc);
     }
 
-    private void ensureCurrentTeacherIsClassTeacherForImport(AttendanceImport importDoc, UUID teacherUserId) {
-        UUID classId = UUID.fromString(importDoc.getClassId());
+    private void ensureCurrentTeacherIsClassTeacher(UUID classId, UUID teacherUserId) {
         ClassEntity klass = classRepository.findById(classId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found"));
         Teacher teacher = teacherRepository.findByUserId(teacherUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Teacher not found"));
         if (klass.getClassTeacher() == null || !klass.getClassTeacher().getId().equals(teacher.getId())) {
-            throw new UnauthorizedException("You are not the assigned class teacher for this class");
+            throw new UnauthorizedException("Only the assigned Class Teacher can upload attendance for " + klass.getClassName());
         }
     }
 
@@ -357,7 +361,7 @@ public class AttendanceImportService {
         return attendanceImportRepository.findByTeacherIdOrderByUploadedAtDesc(teacherUserId.toString(), pageable);
     }
 
-    // ---- Read-only attendance views (backed by the committed Postgres records) ----
+    // ---- Read-only attendance views ----
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> classGrid(UUID classId, UUID subjectId, LocalDate date) {
@@ -428,10 +432,6 @@ public class AttendanceImportService {
         return com.edutrack.util.AttendanceStatusNormalizer.normalizeStatus(raw);
     }
 
-    private String buildExpectedFileName(LocalDate date) {
-        return String.format("attendance-%02d-%02d-%04d.xlsx", date.getDayOfMonth(), date.getMonthValue(), date.getYear());
-    }
-
     private String readCellAsString(Cell cell) {
         if (cell == null) return null;
         if (cell.getCellType() == CellType.STRING) return cell.getStringCellValue().trim();
@@ -451,19 +451,8 @@ public class AttendanceImportService {
         return null;
     }
 
-    private boolean headerCellEquals(Cell cell, String expectedValue) {
-        String raw = readCellAsString(cell);
-        return expectedValue.equals(raw != null ? raw.trim() : raw);
-    }
-
     private String normalizeHeader(String raw) {
         if (raw == null) return "";
         return raw.trim().toLowerCase();
     }
-
-    private String normalizeStudentName(String value) {
-        if (value == null) return "";
-        return value.trim().replaceAll("\\s+", " ").toLowerCase();
-    }
 }
-

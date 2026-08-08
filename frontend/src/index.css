@@ -6,9 +6,38 @@ html, body, #root {
   height: 100%;
 }
 
+/* Global smooth transition for theme property changes */
+*, *::before, *::after {
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              fill 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              stroke 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
   color-scheme: light;
+}
+
+/* Fix browser autofill low-contrast gray backgrounds */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #ffffff inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a !important;
+}
+
+html.dark input:-webkit-autofill,
+html.dark input:-webkit-autofill:hover, 
+html.dark input:-webkit-autofill:focus, 
+html.dark input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #020617 inset !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  caret-color: #f8fafc !important;
 }
 
 :root {
@@ -50,6 +79,7 @@ body::before {
     radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.08), transparent 20%);
   pointer-events: none;
   z-index: -1;
+  transition: background 0.4s ease;
 }
 
 html.dark body::before {
@@ -85,7 +115,14 @@ button,
 input,
 textarea,
 select {
-  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+/* React Hot Toast dark mode styling */
+html.dark [data-toaster] [data-toast] {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid #1f2937 !important;
 }
 
 @layer components {

@@ -7,7 +7,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -42,10 +44,9 @@ public class CloudinaryService {
                 paramsToSign.put("upload_preset", uploadPreset);
             }
 
-            log.debug("Generating Cloudinary signature for folder={}, uploadPreset={}, cloudNameConfigured={}, apiKeyConfigured={}, apiSecretConfigured={}",
+            log.debug("Generating Cloudinary signature for folder={}, uploadPreset={}, cloudNameConfigured={}, apiKeyConfigured={}",
                     folder, uploadPreset, cloudName != null && !cloudName.isBlank(),
-                    apiKey != null && !apiKey.isBlank(),
-                    cloudinary.config.apiSecret != null && !cloudinary.config.apiSecret.isBlank());
+                    apiKey != null && !apiKey.isBlank());
 
             String signature = cloudinary.apiSignRequest(
                     paramsToSign,
@@ -70,6 +71,31 @@ public class CloudinaryService {
         }
     }
 
+    public Map<String, Object> uploadMultipartFile(MultipartFile file, String folder) {
+        try {
+            Map<String, Object> options = new HashMap<>();
+            if (folder != null && !folder.isBlank()) {
+                options.put("folder", folder);
+            }
+            options.put("resource_type", "auto");
+
+            Map result = cloudinary.uploader().upload(file.getBytes(), options);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("secure_url", result.get("secure_url"));
+            response.put("public_id", result.get("public_id"));
+            response.put("format", result.get("format") != null ? result.get("format") : "pdf");
+            response.put("bytes", result.get("bytes") != null ? result.get("bytes") : file.getSize());
+            response.put("resource_type", result.get("resource_type"));
+
+            log.info("Successfully uploaded file to Cloudinary: url={}", result.get("secure_url"));
+            return response;
+        } catch (Exception e) {
+            log.error("Direct Cloudinary upload failed", e);
+            throw new RuntimeException("Cloudinary upload failed: " + e.getMessage(), e);
+        }
+    }
+
     public String uploadRawBytes(byte[] bytes, String folder, String publicId) {
         try {
             Map<String, Object> options = ObjectUtils.asMap(
@@ -89,7 +115,6 @@ public class CloudinaryService {
 
     public void deleteAsset(String publicId) {
         try {
-
             Map result = cloudinary.uploader().destroy(
                     publicId,
                     ObjectUtils.asMap(
@@ -98,10 +123,7 @@ public class CloudinaryService {
                     )
             );
 
-            System.out.println(
-                    "Cloudinary delete result: " + result
-            );
-
+            log.info("Cloudinary delete result for publicId={}: {}", publicId, result);
         } catch (Exception e) {
             log.warn("Cloudinary delete failed for publicId={}", publicId, e);
         }

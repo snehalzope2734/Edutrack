@@ -130,18 +130,25 @@ public class StudentService {
     private Map<String, Object> toSummaryDto(Student s) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", s.getId());
-        m.put("name", s.getUser().getName());
-        m.put("email", s.getUser().getEmail());
+        m.put("studentId", s.getId());
+        m.put("name", s.getUser() != null ? s.getUser().getName() : null);
+        m.put("email", s.getUser() != null ? s.getUser().getEmail() : null);
+        m.put("phone", s.getUser() != null ? s.getUser().getPhone() : null);
+        m.put("role", s.getUser() != null ? s.getUser().getRole() : "Student");
+        m.put("profilePhotoUrl", s.getUser() != null ? s.getUser().getProfilePhotoUrl() : null);
         m.put("rollNumber", s.getRollNumber());
         m.put("classId", s.getClassEntity() != null ? s.getClassEntity().getId() : null);
-        m.put("className", s.getClassEntity() != null ? s.getClassEntity().getClassName() + s.getClassEntity().getSection() : null);
-        m.put("isActive", s.getUser().getIsActive());
+        m.put("className", s.getClassEntity() != null ? s.getClassEntity().getClassName() : null);
+        m.put("section", s.getClassEntity() != null ? s.getClassEntity().getSection() : null);
+        m.put("academicYear", s.getClassEntity() != null ? s.getClassEntity().getAcademicYear() : null);
+        m.put("isActive", s.getUser() != null ? s.getUser().getIsActive() : true);
         return m;
     }
 
     private Map<String, Object> toDetailDto(Student s) {
         Map<String, Object> m = toSummaryDto(s);
         m.put("dob", s.getDateOfBirth());
+        m.put("dateOfBirth", s.getDateOfBirth());
         m.put("gender", s.getGender());
         m.put("bloodGroup", s.getBloodGroup());
         m.put("parentName", s.getParentName());

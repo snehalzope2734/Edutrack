@@ -69,7 +69,6 @@ const teacherNav = [
   { to: "/teacher/materials", label: "Materials", icon: BookOpen },
   { to: "/teacher/report-cards", label: "Report Cards", icon: FileDown },
   { to: "/teacher/notifications", label: "Notifications", icon: Bell },
-  { to: "/teacher/change-requests", label: "Change Requests", icon: ClipboardList },
 ];
 
 const studentNav = [
@@ -119,7 +118,6 @@ export default function App() {
           <Route path="/teacher/report-cards" element={<TeacherReportCardsPage />} />
           <Route path="/teacher/notifications" element={<NotificationsPage />} />
           <Route path="/teacher/notices" element={<Navigate to="/teacher/notifications" replace />} />
-          <Route path="/teacher/change-requests" element={<ChangeRequestsPage />} />
         </Route>
       </Route>
 
