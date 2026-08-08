@@ -2,7 +2,8 @@
   "name": "edutrack-monorepo",
   "private": true,
   "scripts": {
-    "build": "cd frontend && npm install && npm run build",
+    "build": "cd frontend && npm install && npx vite build",
+    "vercel-build": "cd frontend && npm install && npx vite build",
     "dev": "cd frontend && npm run dev"
   },
   "dependencies": {
